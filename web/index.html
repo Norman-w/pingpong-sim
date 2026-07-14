@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏓 乒乓球物理仿真 — 掉落 / 反弹 / 碰撞</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a2e; font-family:system-ui,sans-serif; overflow:hidden; height:100vh; }
+  #c { width:100vw; height:100vh; }
+  .panel { position:fixed; top:16px; left:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px 20px; color:#e0e0e0; z-index:10; font-size:13px; line-height:1.6; pointer-events:none; }
+  .panel h1 { font-size:16px; font-weight:600; color:#fff; margin-bottom:6px; }
+  .hint { color:#8899aa; font-size:11px; margin-top:6px; }
+  .panel button { pointer-events:auto; margin-top:8px; margin-right:4px; background:rgba(255,209,102,0.15); border:1px solid #ffd166; color:#ffd166; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .panel button:hover { background:rgba(255,209,102,0.3); }
+  .panel button.danger { background:rgba(255,100,100,0.12); border-color:#ff6666; color:#ff8888; }
+  .stats { position:fixed; top:16px; right:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 16px; color:#e0e0e0; z-index:10; font-size:12px; font-family:monospace; line-height:1.8; }
+  .stats span { color:#ffd166; }
+</style>
+</head>
+<body>
+<div id="c"></div>
+<div class="panel">
+  <h1>🏓 乒乓球物理仿真</h1>
+  <div class="hint">🖱 左键旋转 | 滚轮缩放 | 右键平移 | 空格扔球 | R 重置视角 | X 清除</div>
+  <button onclick="dropBall()">⬇ 扔一颗</button>
+  <button onclick="dropBalls(5)">⬇ ×5</button>
+  <button class="danger" onclick="clearBalls()">✕ 清除</button>
+</div>
+<div class="stats">
+  球数: <span id="bc">0</span><br>
+  FPS: <span id="fps">—</span>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+// ==================== Scene ====================
+const c = document.getElementById('c');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.Fog(0x1a1a2e, 3000, 20000);
+
+const camera = new THREE.PerspectiveCamera(45, c.clientWidth/c.clientHeight, 1, 30000);
+camera.position.set(4000, 2500, 3500);
+camera.lookAt(1370, 380, -762);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(c.clientWidth, c.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.4;
+c.appendChild(renderer.domElement);
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xaabbcc, 5));
+const sun = new THREE.DirectionalLight(0xffeedd, 8);
+sun.position.set(1500, 3000, 2000);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 15000;
+sun.shadow.camera.left = -4000; sun.shadow.camera.right = 4000;
+sun.shadow.camera.top = 4000; sun.shadow.camera.bottom = -4000;
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0xaaccff, 3));
+
+// Ground grid + plane
+const grid = new THREE.PolarGridHelper(2500, 32, 24, 64, 0x334455, 0x222244);
+grid.position.set(1370, -3, -762); scene.add(grid);
+const gp = new THREE.Mesh(
+  new THREE.PlaneGeometry(6000, 6000),
+  new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.9 })
+);
+gp.rotation.x = -Math.PI/2; gp.position.set(1370, -5, -762);
+gp.receiveShadow = true; scene.add(gp);
+
+// Controls
+const CTR = new THREE.Vector3(1370, 380, -762);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 500; controls.maxDistance = 12000;
+controls.target.copy(CTR); controls.update();
+
+// ==================== Physics ====================
+const G = 9810;           // gravity mm/s²
+const R = 20;             // ball radius (40mm dia)
+const REST = 0.85;        // table bounce
+const GREST = 0.5;        // ground bounce
+const DRAG = 0.999;       // air drag per ms
+
+const TABLE = { x0:0, x1:2740, y0:760, y1:785, z0:-1525, z1:0 };
+const NET = { x:1370, yTop:937.5, z0:-1373, z1:-152.5 };
+const FLOOR = -2;
+
+const balls = [];
+const bGeo = new THREE.SphereGeometry(R, 24, 24);
+const bMat = new THREE.MeshPhysicalMaterial({
+  color: 0xff6600, metalness: 0.05, roughness: 0.3,
+  clearcoat: 0.3, clearcoatRoughness: 0.1
+});
+
+function spawn(x,y,z, vx,vy,vz) {
+  const m = new THREE.Mesh(bGeo, bMat);
+  m.castShadow = m.receiveShadow = true;
+  m.position.set(x,y,z);
+  scene.add(m);
+  balls.push({ m, px:x,py:y,pz:z, vx:vx||0,vy:vy||0,vz:vz||0, t:0 });
+  document.getElementById('bc').textContent = balls.length;
+}
+
+function dropBall() {
+  const x = 800 + Math.random() * 1100;
+  const z = -(200 + Math.random() * 1100);
+  const y = 2500 + Math.random() * 1000;
+  spawn(x, y, z, (Math.random()-0.5)*200, 0, (Math.random()-0.5)*200);
+}
+function dropBalls(n) { for(let i=0;i<n;i++) setTimeout(dropBall, i*120); }
+function clearBalls() {
+  balls.forEach(b => scene.remove(b.m));
+  balls.length = 0;
+  document.getElementById('bc').textContent = '0';
+}
+window.dropBall = dropBall;
+window.dropBalls = dropBalls;
+window.clearBalls = clearBalls;
+
+// Collision
+function collideTable(b) {
+  const r = R;
+  if (b.px>TABLE.x0+r && b.px<TABLE.x1-r && b.pz>TABLE.z0+r && b.pz<TABLE.z1-r) {
+    if (b.py-r <= TABLE.y1 && b.py >= TABLE.y0) {
+      b.py = TABLE.y1 + r;
+      if (b.vy < 0) b.vy = Math.abs(b.vy) * REST;
+      b.vx *= 0.95; b.vz *= 0.95;
+    }
+  }
+}
+function collideNet(b) {
+  const r = R;
+  if (b.py > TABLE.y1 && b.py < NET.yTop && b.pz > NET.z0 && b.pz < NET.z1) {
+    if (Math.abs(b.px - NET.x) < r + 1) {
+      b.px = NET.x + (b.px > NET.x ? 1 : -1) * (r + 1);
+      b.vx = Math.abs(b.vx) * 0.4 * (b.px > NET.x ? -1 : 1);
+    }
+  }
+}
+
+// ==================== Loop ====================
+const clk = new THREE.Clock();
+let frames=0, ft=0, fps=0;
+
+function step(dt) {
+  const ss = 3, sd = dt/ss;
+  for (let s=0; s<ss; s++) {
+    for (const b of balls) {
+      b.vy -= G * sd;
+      b.vx *= DRAG; b.vy *= DRAG; b.vz *= DRAG;
+      b.px += b.vx * sd; b.py += b.vy * sd; b.pz += b.vz * sd;
+
+      if (b.py-R <= FLOOR) {
+        b.py = FLOOR+R; b.vy = Math.abs(b.vy)*GREST; b.vx*=0.9; b.vz*=0.9;
+      }
+      collideTable(b);
+      collideNet(b);
+    }
+  }
+  for (const b of balls) {
+    b.t += dt;
+    b.m.position.set(b.px, b.py, b.pz);
+    const sp = Math.sqrt(b.vx*b.vx+b.vy*b.vy+b.vz*b.vz);
+    if (sp>10) { b.m.rotation.x += b.vz*0.001; b.m.rotation.z -= b.vx*0.001; }
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clk.getDelta()*1000, 50);
+  step(dt);
+  frames++; ft+=dt;
+  if (ft>=500) { fps=Math.round(frames/(ft/1000)); frames=0; ft=0; document.getElementById('fps').textContent = fps; }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// Remove old balls
+setInterval(() => {
+  for (let i=balls.length-1; i>=0; i--) {
+    if (balls[i].t > 30000) { scene.remove(balls[i].m); balls.splice(i,1); }
+  }
+  document.getElementById('bc').textContent = balls.length;
+}, 5000);
+
+animate();
+
+window.addEventListener('keydown', e => {
+  if (e.code==='Space') { e.preventDefault(); dropBall(); }
+  if (e.key==='r') { camera.position.set(4000,2500,3500); controls.target.copy(CTR); controls.update(); }
+  if (e.key==='x') clearBalls();
+});
+window.addEventListener('resize', () => {
+  camera.aspect = c.clientWidth/c.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(c.clientWidth, c.clientHeight);
+});
+
+// ==================== Load STLs ====================
+const loader = new STLLoader();
+const BASE = window.location.pathname.replace(/\/(web\/)?(index\.html)?$/,'').replace(/\/+$/,'');
+
+function loadSTL(file, color, ml, rough, op) {
+  return new Promise((ok, fail) => {
+    loader.load(BASE+'/stl/'+file, geo => {
+      geo.computeVertexNormals();
+      geo.rotateX(-Math.PI/2);
+      const mat = new THREE.MeshPhysicalMaterial({
+        color, metalness:ml, roughness:rough,
+        transparent:op<1, opacity:op, clearcoat:0.05, clearcoatRoughness:0.3
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      scene.add(mesh); ok(mesh);
+    }, null, fail);
+  });
+}
+
+const msg = document.createElement('div');
+msg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#8899aa;font-size:14px;z-index:100;';
+msg.textContent = '加载模型中...';
+document.body.appendChild(msg);
+
+(async()=>{
+  try {
+    await loadSTL('table-surface.stl', 0x1a5c2a, 0.02, 0.6, 1);
+    await loadSTL('table-frame.stl',   0x555555, 0.3,  0.4, 1);
+    await loadSTL('table-legs.stl',    0x5a5a6e, 0.3,  0.35, 1);
+    await loadSTL('table-net.stl',     0xdddddd, 0.15, 0.3, 0.7);
+    msg.remove();
+  } catch(e) { msg.textContent = '加载失败: '+e.message; console.error(e); }
+})();
+</script>
+</body>
+</html>
