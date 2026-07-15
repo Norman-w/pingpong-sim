@@ -14,22 +14,89 @@
   .panel button { pointer-events:auto; margin-top:8px; margin-right:4px; background:rgba(255,209,102,0.15); border:1px solid #ffd166; color:#ffd166; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
   .panel button:hover { background:rgba(255,209,102,0.3); }
   .panel button.danger { background:rgba(255,100,100,0.12); border-color:#ff6666; color:#ff8888; }
+  .machine-panel { position:fixed; left:16px; top:154px; width:390px; max-height:calc(100vh - 170px); overflow:auto; background:rgba(17,19,38,0.94); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:14px; color:#e8e8ee; z-index:12; font-size:12px; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
+  .machine-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .machine-header h2 { font-size:15px; color:#fff; }
+  .machine-status { color:#8c96aa; font:11px monospace; }
+  .machine-status.running { color:#5ee6a8; }
+  .machine-actions { display:flex; gap:7px; margin-bottom:10px; }
+  .machine-actions button { flex:1; border:1px solid #4e5975; color:#dce4ff; background:#272c42; border-radius:7px; padding:8px 6px; cursor:pointer; }
+  .machine-actions button.primary { color:#17182a; background:#ffd166; border-color:#ffd166; font-weight:700; }
+  .machine-actions button.active { background:#193e32; border-color:#5ee6a8; color:#76efba; }
+  .machine-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; padding:10px; border-radius:8px; background:rgba(255,255,255,0.035); }
+  .machine-control { display:grid; gap:3px; color:#aeb7ca; }
+  .machine-control label { display:flex; justify-content:space-between; gap:6px; }
+  .machine-control input[type="range"] { width:100%; accent-color:#ffd166; }
+  .machine-control select { width:100%; color:#e8e8ee; background:#252a40; border:1px solid #454d68; border-radius:5px; padding:4px; }
+  .random-control { display:flex; align-items:center; gap:7px; align-self:end; min-height:26px; color:#c5ccdb; }
+  .random-control input { accent-color:#ffd166; }
+  .machine-detail { margin:10px 0; padding:9px 10px; color:#adb8cb; line-height:1.55; background:rgba(255,209,102,0.06); border-left:2px solid #ffd166; border-radius:4px; }
+  .machine-detail strong { color:#fff; }
+  .preset-group { margin-top:10px; }
+  .preset-group h3 { color:#8994aa; font-size:11px; font-weight:600; margin-bottom:5px; }
+  .preset-buttons { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:5px; }
+  .preset-button { position:relative; min-height:32px; padding:5px 3px; border:1px solid color-mix(in srgb, var(--preset-color), #222 52%); border-radius:6px; background:color-mix(in srgb, var(--preset-color), transparent 88%); color:#dce1ec; font-size:11px; cursor:pointer; line-height:1.15; }
+  .preset-button:hover { background:color-mix(in srgb, var(--preset-color), transparent 76%); }
+  .preset-button.active { border-color:var(--preset-color); color:#fff; box-shadow:0 0 0 1px color-mix(in srgb, var(--preset-color), transparent 55%) inset; }
+  .preset-button kbd { position:absolute; top:2px; right:3px; color:#818ba0; font:8px monospace; }
+  .machine-footer { display:flex; justify-content:space-between; margin-top:11px; padding-top:8px; border-top:1px solid rgba(255,255,255,.07); color:#8993a8; font:10px monospace; }
   .stats { position:fixed; top:16px; right:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 16px; color:#e0e0e0; z-index:10; font-size:12px; font-family:monospace; line-height:1.8; }
   .stats span { color:#ffd166; }
   .lucide { width:1em; height:1em; vertical-align:-0.125em; stroke-width:1.5; }
   .panel .lucide, .hint .lucide { margin-right:2px; }
   button .lucide { margin-right:4px; }
+  @media (max-width:700px) {
+    .machine-panel { width:calc(100vw - 32px); top:auto; bottom:12px; max-height:54vh; }
+    .preset-buttons { grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .stats { display:none; }
+  }
 </style>
 </head>
 <body>
 <div id="c"></div>
 <div class="panel">
   <h1><svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.25em"><ellipse cx="11" cy="10" rx="7" ry="9" transform="rotate(-15 11 10)"/><line x1="16" y1="17" x2="21" y2="21"/><circle cx="13" cy="7" r="1.8"/></svg> 乒乓球物理仿真</h1>
-  <div class="hint"><i data-lucide="mouse-pointer-2" class="lucide"></i> 左键旋转 | 滚轮缩放 | 右键平移 | 空格扔球 | R 重置视角 | X 清除</div>
+  <div class="hint"><i data-lucide="mouse-pointer-2" class="lucide"></i> 拖动视角 | F 发一球 | P 连续 | 数字1–9快捷球路 | X 清除</div>
   <button onclick="window.dropBall()"><i data-lucide="arrow-down" class="lucide"></i>扔一颗</button>
   <button onclick="window.dropBalls(5)"><i data-lucide="arrow-down" class="lucide"></i>×5</button>
   <button class="danger" onclick="window.clearBalls()"><i data-lucide="x" class="lucide"></i>清除</button>
 </div>
+<aside class="machine-panel" aria-label="发球机控制台">
+  <div class="machine-header">
+    <h2>🏓 对面发球机</h2>
+    <span id="machine-status" class="machine-status">已停止</span>
+  </div>
+  <div class="machine-actions">
+    <button id="machine-once" class="primary" type="button">发一球 [F]</button>
+    <button id="machine-toggle" type="button">连续发球 [P]</button>
+  </div>
+  <div class="machine-controls">
+    <div class="machine-control">
+      <label for="machine-strength"><span>力度</span><span id="strength-value">100%</span></label>
+      <input id="machine-strength" type="range" min="60" max="140" step="5" value="100">
+    </div>
+    <div class="machine-control">
+      <label for="machine-cadence"><span>频率</span><span id="cadence-value">1.2 球/秒</span></label>
+      <input id="machine-cadence" type="range" min="0.4" max="3" step="0.1" value="1.2">
+    </div>
+    <div class="machine-control">
+      <label for="machine-lane"><span>落点区域</span></label>
+      <select id="machine-lane">
+        <option value="random">全台随机</option>
+        <option value="forehand">正手位</option>
+        <option value="middle">中路</option>
+        <option value="backhand">反手位</option>
+      </select>
+    </div>
+    <label class="random-control"><input id="machine-randomize" type="checkbox" checked> 落点扰动</label>
+  </div>
+  <div id="machine-detail" class="machine-detail"></div>
+  <div id="preset-groups"></div>
+  <div class="machine-footer">
+    <span>已发射 <b id="machine-shot-count">0</b></span>
+    <span>接球方落台 <b id="machine-land-count">0</b></span>
+  </div>
+</aside>
 <div class="stats">
   球数: <span id="bc">0</span><br>
   FPS: <span id="fps">—</span>

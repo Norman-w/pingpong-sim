@@ -16,9 +16,7 @@ const AIR_DENSITY = 1.204;
 const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
 
-// Experimental ball/table dynamic friction is approximately 0.25. Rapier's
-// Multiply rule lets the ball carry the measured pair coefficient while fixed
-// surfaces use 1.0.
+// Experimental ball/table dynamic friction used by the explicit contact impulse.
 const BALL_TABLE_FRICTION = 0.25;
 const TABLE_TOP = 0.785;
 const TABLE_MIN_X = BALL_RADIUS;
@@ -43,6 +41,8 @@ export interface RapierBall {
   mesh: THREE.Mesh;
   t: number;
   supportedByTable: boolean;
+  tableImpacts: number;
+  lastTableImpact: { x: number; z: number } | null;
 }
 
 const balls: RapierBall[] = [];
@@ -178,14 +178,46 @@ function resolveTableImpact(ball: RapierBall): void {
 
   if (!aboveTable || v.y >= 0) return;
 
-  // Predict crossing within this fixed step. Resolving the normal impulse here
-  // gives an exact, speed-dependent bounce; the zero-restitution Rapier table
-  // then only prevents penetration and supplies static/sliding friction.
+  // Predict crossing within this fixed step. The tabletop is a sensor, so this
+  // explicit response is the single source of normal and tangential impulses.
   const nextY = p.y + v.y * FIXED_DT - 0.5 * GRAVITY * FIXED_DT ** 2;
   if (p.y >= restingHeight - 0.002 && nextY <= restingHeight) {
     const restitution = tableRestitution(Math.abs(v.y));
+    const w = ball.body.angvel();
+    ball.tableImpacts += 1;
+    ball.lastTableImpact = { x: p.x, z: p.z };
+
+    // Tangential contact impulse at the bottom of a hollow sphere. This is
+    // what makes topspin kick forward, backspin hold up, and sidespin turn
+    // after the bounce instead of behaving like differently coloured flat balls.
+    const contactVx = v.x + w.z * BALL_RADIUS;
+    const contactVz = v.z - w.x * BALL_RADIUS;
+    const contactSpeed = Math.hypot(contactVx, contactVz);
+    let impulseX = 0;
+    let impulseZ = 0;
+    if (contactSpeed > 1e-6) {
+      // Effective tangential mass: 1 / (1/m + r²/I) = 0.4m for a thin shell.
+      const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
+      const normalImpulse = BALL_MASS * (1 + restitution) * Math.abs(v.y);
+      const impulseMagnitude = Math.min(
+        stickingImpulse,
+        BALL_TABLE_FRICTION * normalImpulse,
+      );
+      impulseX = -impulseMagnitude * contactVx / contactSpeed;
+      impulseZ = -impulseMagnitude * contactVz / contactSpeed;
+    }
+
     ball.body.setTranslation({ x: p.x, y: restingHeight, z: p.z }, true);
-    ball.body.setLinvel({ x: v.x, y: -v.y * restitution, z: v.z }, true);
+    ball.body.setLinvel({
+      x: v.x + impulseX / BALL_MASS,
+      y: -v.y * restitution,
+      z: v.z + impulseZ / BALL_MASS,
+    }, true);
+    ball.body.setAngvel({
+      x: w.x - BALL_RADIUS * impulseZ / BALL_INERTIA,
+      y: w.y,
+      z: w.z + BALL_RADIUS * impulseX / BALL_INERTIA,
+    }, true);
     if (restitution === 0) {
       ball.supportedByTable = true;
       ball.body.setGravityScale(0, true);
@@ -271,6 +303,8 @@ export function createBall(
     mesh,
     t: 0,
     supportedByTable: false,
+    tableImpacts: 0,
+    lastTableImpact: null,
   };
   balls.push(ball);
   return ball;
