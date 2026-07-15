@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>乒乓球物理仿真 — 掉落 / 反弹 / 碰撞</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a2e; font-family:system-ui,sans-serif; overflow:hidden; height:100vh; }
+  #c { width:100vw; height:100vh; }
+  .panel { position:fixed; top:16px; left:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px 20px; color:#e0e0e0; z-index:10; font-size:13px; line-height:1.6; pointer-events:none; }
+  .panel h1 { font-size:16px; font-weight:600; color:#fff; margin-bottom:6px; }
+  .hint { color:#8899aa; font-size:11px; margin-top:6px; }
+  .panel button { pointer-events:auto; margin-top:8px; margin-right:4px; background:rgba(255,209,102,0.15); border:1px solid #ffd166; color:#ffd166; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .panel button:hover { background:rgba(255,209,102,0.3); }
+  .panel button.danger { background:rgba(255,100,100,0.12); border-color:#ff6666; color:#ff8888; }
+  .stats { position:fixed; top:16px; right:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 16px; color:#e0e0e0; z-index:10; font-size:12px; font-family:monospace; line-height:1.8; }
+  .stats span { color:#ffd166; }
+  .lucide { width:1em; height:1em; vertical-align:-0.125em; stroke-width:1.5; }
+  .panel .lucide, .hint .lucide { margin-right:2px; }
+  button .lucide { margin-right:4px; }
+</style>
+</head>
+<body>
+<div id="c"></div>
+<div class="panel">
+  <h1><svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.25em"><ellipse cx="11" cy="10" rx="7" ry="9" transform="rotate(-15 11 10)"/><line x1="16" y1="17" x2="21" y2="21"/><circle cx="13" cy="7" r="1.8"/></svg> 乒乓球物理仿真</h1>
+  <div class="hint"><i data-lucide="mouse-pointer-2" class="lucide"></i> 左键旋转 | 滚轮缩放 | 右键平移 | 空格扔球 | R 重置视角 | X 清除</div>
+  <button onclick="window.dropBall()"><i data-lucide="arrow-down" class="lucide"></i>扔一颗</button>
+  <button onclick="window.dropBalls(5)"><i data-lucide="arrow-down" class="lucide"></i>×5</button>
+  <button class="danger" onclick="window.clearBalls()"><i data-lucide="x" class="lucide"></i>清除</button>
+</div>
+<div class="stats">
+  球数: <span id="bc">0</span><br>
+  FPS: <span id="fps">—</span>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
