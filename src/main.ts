@@ -61,13 +61,17 @@ function makeMat(): THREE.MeshPhysicalMaterial {
   });
 }
 
-const SPX = 2055, SPZ = -762, SPY = 6000;
+const TABLE_TOP_Y = 785;
+const BALL_RADIUS = 20;
+const STANDARD_DROP_HEIGHT = 300;
+const SPX = 2055, SPZ = -762;
 
 async function dropBall(): Promise<void> {
   if (!isReady()) return;
 
   const x = SPX + (Math.random() - 0.5) * 200;
-  const y = SPY + Math.random() * 300;
+  // ITTF table calibration drop: 300 mm from the ball's underside to the table.
+  const y = TABLE_TOP_Y + BALL_RADIUS + STANDARD_DROP_HEIGHT;
   const z = SPZ + (Math.random() - 0.5) * 300;
 
   const mesh = new THREE.Mesh(bGeo, makeMat());
@@ -75,18 +79,9 @@ async function dropBall(): Promise<void> {
   mesh.position.set(x, y, z);
   scene.add(mesh);
 
-  // Small horizontal velocity so friction dissipates energy on bounce.
-  // Pure vertical bounce would never settle (no sliding friction).
-  const vx = (Math.random() - 0.5) * 200;
-  const vz = (Math.random() - 0.5) * 200;
-  // Also give angular velocity — friction and Magnus effect dissipate spin energy
-  const wx = (Math.random() - 0.5) * 20;
-  const wy = (Math.random() - 0.5) * 20;
-  const wz = (Math.random() - 0.5) * 20;
-  const ball = createBall(x, y, z, vx, 0, vz, mesh);
-  if (ball) {
-    ball.body.setAngvel({ x: wx, y: wy, z: wz }, true);
-  }
+  // A drop starts from rest. Random launch velocity/spin makes a calibration
+  // drop curve in the air and is not part of natural free fall.
+  const ball = createBall(x, y, z, 0, 0, 0, mesh);
   if (!ball) { scene.remove(mesh); return; }
   document.getElementById('bc')!.textContent = String(getBallCount());
 }
@@ -108,11 +103,27 @@ let frames = 0, ft = 0, fps = 0, lastT = performance.now();
 
 function animate(): void {
   requestAnimationFrame(animate);
-  physicsStep();
+  const now = performance.now();
+  const elapsedMs = Math.min(now - lastT, 100);
+  lastT = now;
+  physicsStep(elapsedMs / 1000);
   syncMeshes();
 
-  const now = performance.now();
-  ft += now - lastT; lastT = now;
+  if (import.meta.env.DEV) {
+    const firstBall = getBalls()[0];
+    const counter = document.getElementById('bc')!;
+    if (firstBall) {
+      counter.dataset.telemetry = JSON.stringify({
+        position: firstBall.body.translation(),
+        linearVelocity: firstBall.body.linvel(),
+        angularVelocity: firstBall.body.angvel(),
+      });
+    } else {
+      delete counter.dataset.telemetry;
+    }
+  }
+
+  ft += elapsedMs;
   frames++;
   if (ft >= 500) {
     fps = Math.round(frames / (ft / 1000));
@@ -124,10 +135,9 @@ function animate(): void {
 }
 
 setInterval(() => {
-  for (const b of getBalls()) b.t += 5;
   const all = getBalls();
   for (let i = all.length - 1; i >= 0; i--) {
-    if (all[i].t > 30000) { scene.remove(all[i].mesh); removeBall(all[i]); }
+    if (all[i].t > 30) { scene.remove(all[i].mesh); removeBall(all[i]); }
   }
   document.getElementById('bc')!.textContent = String(getBallCount());
 }, 5000);
