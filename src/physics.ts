@@ -16,6 +16,7 @@ export interface RapierBall {
   body: any;
   mesh: THREE.Mesh;
   t: number;
+  settled: boolean;
 }
 
 const balls: RapierBall[] = [];
@@ -72,10 +73,9 @@ export function createBall(
     RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(x, y, z)
       .setLinvel(vx, vy, vz)
-      .setLinearDamping(0.5)
-      .setAngularDamping(0.8)
-      .setCcdEnabled(true)
-      .setCanSleep(true),
+      .setLinearDamping(0.02)  // minimal — COR handles most energy loss
+      .setAngularDamping(0.1)
+      .setCcdEnabled(true),
   );
 
   world.createCollider(
@@ -88,7 +88,7 @@ export function createBall(
     body,
   );
 
-  const ball: RapierBall = { body, mesh, t: 0 };
+  const ball: RapierBall = { body, mesh, t: 0, settled: false };
   balls.push(ball);
   return ball;
 }
@@ -116,10 +116,30 @@ export function step(): void {
 
 export function syncMeshes(): void {
   if (!world) return;
+  const REST_Y = 785 + BALL_R; // ball center Y when resting on table (805)
   for (const b of balls) {
     const p = b.body.translation();
     const r = b.body.rotation();
     b.mesh.position.set(p.x, p.y, p.z);
     b.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+
+    const v = b.body.linvel();
+    const vy: number = v.y;
+    const nearTable = Math.abs(p.y - REST_Y) < 5;
+
+    if (b.settled) {
+      if (nearTable && Math.abs(vy) < 100) {
+        // Keep planted: only clamp Y, leave XZ velocity for natural friction
+        b.body.setTranslation({ x: p.x, y: REST_Y, z: p.z }, true);
+        b.body.setLinvel({ x: v.x, y: 0, z: v.z }, true);
+      } else {
+        b.settled = false; // un-settle if ball leaves table
+      }
+    } else if (nearTable && vy < 0 && Math.abs(vy) < 20) {
+      // First trigger: ball barely bouncing, settle it
+      b.settled = true;
+      b.body.setTranslation({ x: p.x, y: REST_Y, z: p.z }, true);
+      b.body.setLinvel({ x: v.x, y: 0, z: v.z }, true);
+    }
   }
 }

@@ -75,7 +75,11 @@ async function dropBall(): Promise<void> {
   mesh.position.set(x, y, z);
   scene.add(mesh);
 
-  const ball = createBall(x, y, z, 0, 0, 0, mesh);
+  // Small horizontal velocity so friction dissipates energy on bounce.
+  // Pure vertical bounce would never settle (no sliding friction).
+  const vx = (Math.random() - 0.5) * 100;
+  const vz = (Math.random() - 0.5) * 100;
+  const ball = createBall(x, y, z, vx, 0, vz, mesh);
   if (!ball) { scene.remove(mesh); return; }
   document.getElementById('bc')!.textContent = String(getBallCount());
 }
