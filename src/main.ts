@@ -77,9 +77,16 @@ async function dropBall(): Promise<void> {
 
   // Small horizontal velocity so friction dissipates energy on bounce.
   // Pure vertical bounce would never settle (no sliding friction).
-  const vx = (Math.random() - 0.5) * 100;
-  const vz = (Math.random() - 0.5) * 100;
+  const vx = (Math.random() - 0.5) * 200;
+  const vz = (Math.random() - 0.5) * 200;
+  // Also give angular velocity — friction and Magnus effect dissipate spin energy
+  const wx = (Math.random() - 0.5) * 20;
+  const wy = (Math.random() - 0.5) * 20;
+  const wz = (Math.random() - 0.5) * 20;
   const ball = createBall(x, y, z, vx, 0, vz, mesh);
+  if (ball) {
+    ball.body.setAngvel({ x: wx, y: wy, z: wz }, true);
+  }
   if (!ball) { scene.remove(mesh); return; }
   document.getElementById('bc')!.textContent = String(getBallCount());
 }
