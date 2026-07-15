@@ -2,11 +2,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { createIcons, MousePointer2, ArrowDown, X } from 'lucide';
-import { init as initPhysics, createBall, removeBall, clearAllBalls, getBalls, step as physicsStep, syncMeshes, getBallCount } from './physics';
+import { init as initPhysics, isReady, createBall, removeBall, clearAllBalls, getBalls, step as physicsStep, syncMeshes, getBallCount } from './physics';
 
-createIcons({
-  icons: { MousePointer2, ArrowDown, X },
-});
+createIcons({ icons: { MousePointer2, ArrowDown, X } });
 
 // ==================== Scene ====================
 const c = document.getElementById('c')!;
@@ -27,72 +25,49 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.4;
 c.appendChild(renderer.domElement);
 
-// Lighting
 scene.add(new THREE.AmbientLight(0xaabbcc, 5));
 const sun = new THREE.DirectionalLight(0xffeedd, 8);
 sun.position.set(1500, 3000, 2000);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.near = 1;
-sun.shadow.camera.far = 15000;
-sun.shadow.camera.left = -4000;
-sun.shadow.camera.right = 4000;
-sun.shadow.camera.top = 4000;
-sun.shadow.camera.bottom = -4000;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 15000;
+sun.shadow.camera.left = -4000; sun.shadow.camera.right = 4000;
+sun.shadow.camera.top = 4000; sun.shadow.camera.bottom = -4000;
 scene.add(sun);
 scene.add(new THREE.DirectionalLight(0xaaccff, 3));
 
-// Ground grid + plane
 const grid = new THREE.PolarGridHelper(2500, 32, 24, 64, 0x334455, 0x222244);
-grid.position.set(1370, -3, -762);
-scene.add(grid);
+grid.position.set(1370, -3, -762); scene.add(grid);
 const gp = new THREE.Mesh(
   new THREE.PlaneGeometry(6000, 6000),
   new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.9 }),
 );
-gp.rotation.x = -Math.PI / 2;
-gp.position.set(1370, -5, -762);
-gp.receiveShadow = true;
-scene.add(gp);
+gp.rotation.x = -Math.PI / 2; gp.position.set(1370, -5, -762);
+gp.receiveShadow = true; scene.add(gp);
 
-// Controls
 const CTR = new THREE.Vector3(1370, 380, -762);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance = 500;
-controls.maxDistance = 12000;
-controls.target.copy(CTR);
-controls.update();
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 500; controls.maxDistance = 12000;
+controls.target.copy(CTR); controls.update();
 
-// ==================== Physics World ====================
-// Rapier3D handles all collision, friction, CCD, angular dynamics
-const physicsReady = initPhysics().catch((e: any) => {
-  console.error('[pingpong] Rapier init failed:', e);
-  const msg = document.getElementById('load-msg');
-  if (msg) msg.textContent = '物理引擎加载失败: ' + String(e.message || e);
-  return Promise.reject(e);
-});
-
-// Ball visual geometry (shared)
-const R = 20;
-const bGeo = new THREE.SphereGeometry(R, 32, 32);
+// ==================== Balls ====================
+const bGeo = new THREE.SphereGeometry(20, 32, 32);
 
 function makeMat(): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     color: new THREE.Color().setHSL(0.08 + Math.random() * 0.06, 1, 0.45 + Math.random() * 0.15),
-    metalness: 0.05, roughness: 0.3,
-    clearcoat: 0.3, clearcoatRoughness: 0.1,
+    metalness: 0.05, roughness: 0.3, clearcoat: 0.3, clearcoatRoughness: 0.1,
   });
 }
 
-// Spawn point: forehand half middle, 6m high
 const SPX = 2055, SPZ = -762, SPY = 6000;
 
 async function dropBall(): Promise<void> {
-  await physicsReady;
+  if (!isReady()) return;
+
   const x = SPX + (Math.random() - 0.5) * 200;
-  const y = SPY + Math.random() * 500;
+  const y = SPY + Math.random() * 300;
   const z = SPZ + (Math.random() - 0.5) * 300;
 
   const mesh = new THREE.Mesh(bGeo, makeMat());
@@ -100,43 +75,34 @@ async function dropBall(): Promise<void> {
   mesh.position.set(x, y, z);
   scene.add(mesh);
 
-  createBall(x, y, z, 0, 0, 0, mesh);
+  const ball = createBall(x, y, z, 0, 0, 0, mesh);
+  if (!ball) { scene.remove(mesh); return; }
   document.getElementById('bc')!.textContent = String(getBallCount());
 }
 
 async function dropBalls(n: number): Promise<void> {
-  for (let i = 0; i < n; i++) {
-    setTimeout(() => dropBall(), i * 150);
-  }
+  for (let i = 0; i < n; i++) setTimeout(() => dropBall(), i * 200);
 }
 
 async function clearBalls(): Promise<void> {
-  await physicsReady;
-  for (const b of getBalls()) {
-    scene.remove(b.mesh);
-  }
+  for (const b of getBalls()) scene.remove(b.mesh);
   clearAllBalls();
   document.getElementById('bc')!.textContent = '0';
 }
 
 Object.assign(window, { dropBall, dropBalls, clearBalls });
 
-// ==================== Animation Loop ====================
+// ==================== Loop ====================
 let frames = 0, ft = 0, fps = 0, lastT = performance.now();
 
 function animate(): void {
   requestAnimationFrame(animate);
-
-  // Physics step (safe to call before init — becomes no-op)
   physicsStep();
   syncMeshes();
 
   const now = performance.now();
-  const elapsed = now - lastT;
-  lastT = now;
-
+  ft += now - lastT; lastT = now;
   frames++;
-  ft += elapsed;
   if (ft >= 500) {
     fps = Math.round(frames / (ft / 1000));
     frames = 0; ft = 0;
@@ -146,22 +112,18 @@ function animate(): void {
   renderer.render(scene, camera);
 }
 
-// Remove old balls (every 5s)
-setInterval(async () => {
-  await physicsReady;
+setInterval(() => {
+  for (const b of getBalls()) b.t += 5;
   const all = getBalls();
   for (let i = all.length - 1; i >= 0; i--) {
-    if (all[i].t > 30000) {
-      scene.remove(all[i].mesh);
-      removeBall(all[i]);
-    }
+    if (all[i].t > 30000) { scene.remove(all[i].mesh); removeBall(all[i]); }
   }
-  // Tick lifespan
-  for (const b of all) b.t += 5;
   document.getElementById('bc')!.textContent = String(getBallCount());
 }, 5000);
 
-animate();
+initPhysics().then(() => {
+  animate();
+});
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Space') {
