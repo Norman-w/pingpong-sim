@@ -24,6 +24,18 @@
   .machine-actions button.primary { color:#17182a; background:#ffd166; border-color:#ffd166; font-weight:700; }
   .machine-actions button.active { background:#193e32; border-color:#5ee6a8; color:#76efba; }
   .machine-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; padding:10px; border-radius:8px; background:rgba(255,255,255,0.035); }
+  .view-section { margin-top:10px; padding:10px; border-radius:8px; background:rgba(255,255,255,0.035); }
+  .view-section h3 { margin:0 0 7px; font-size:12px; color:#dce4ff; }
+  .view-section h3 + h3 { margin-top:9px; }
+  .view-buttons { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:5px; }
+  .view-buttons button { margin:0; padding:6px 3px; border:1px solid #4e5975; border-radius:6px; background:#242940; color:#cdd7ef; font-size:11px; cursor:pointer; }
+  .view-buttons button:hover { background:#303851; }
+  .view-buttons button.active { border-color:#ffd166; background:rgba(255,209,102,.18); color:#fff2c2; box-shadow:0 0 0 1px rgba(255,209,102,.2) inset; }
+  .tracking-actions { display:grid; grid-template-columns:1.35fr .65fr; gap:5px; margin-top:7px; }
+  .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
+  .tracking-actions button.secondary { border-color:#59647f; background:#242940; color:#aeb8ca; }
+  .tracking-status { margin-top:7px; min-height:34px; padding:6px 7px; border-radius:5px; background:rgba(84,214,255,.07); color:#aebdd1; line-height:1.45; }
+  .tracking-status strong { color:#fff; }
   .machine-control { display:grid; gap:3px; color:#aeb7ca; }
   .machine-control label { display:flex; justify-content:space-between; gap:6px; }
   .machine-control input[type="range"] { width:100%; accent-color:#ffd166; }
@@ -131,6 +143,40 @@
       </select>
     </div>
     <label class="random-control"><input id="machine-randomize" type="checkbox" checked> 落点扰动</label>
+  </div>
+  <div class="view-section" aria-label="观察者视角与站位">
+    <h3>观察身高（眼睛高度）</h3>
+    <div class="view-buttons" id="view-heights">
+      <button type="button" data-view-height="800">幼儿 0.8m</button>
+      <button type="button" data-view-height="950">儿童 0.95m</button>
+      <button type="button" data-view-height="1100">儿童 1.1m</button>
+      <button type="button" data-view-height="1350">青少年 1.35m</button>
+      <button type="button" data-view-height="1600" class="active">成人 1.6m</button>
+      <button type="button" data-view-height="1800">高个 1.8m</button>
+    </div>
+    <h3>站位</h3>
+    <div class="view-buttons" id="view-stances">
+      <button type="button" data-view-stance="near">近台</button>
+      <button type="button" data-view-stance="mid" class="active">中台</button>
+      <button type="button" data-view-stance="far">远台</button>
+      <button type="button" data-view-stance="forehand">正手位</button>
+      <button type="button" data-view-stance="middle">中路</button>
+      <button type="button" data-view-stance="backhand">反手位</button>
+    </div>
+    <h3>处理手法与击球点</h3>
+    <div class="view-buttons" id="contact-techniques">
+      <button type="button" data-contact-technique="forehand-loop" class="active">正手拉球</button>
+      <button type="button" data-contact-technique="forehand-drive">正手快攻</button>
+      <button type="button" data-contact-technique="backhand-loop">反手拧拉</button>
+      <button type="button" data-contact-technique="block">快带/挡</button>
+      <button type="button" data-contact-technique="push">搓球</button>
+      <button type="button" data-contact-technique="chop">削球</button>
+    </div>
+    <div class="tracking-actions">
+      <button id="tracking-start" type="button">跟球至击球瞬间</button>
+      <button id="tracking-stop" class="secondary" type="button">退出跟球</button>
+    </div>
+    <div id="tracking-status" class="tracking-status"><strong>正手拉球</strong>：身体右前方，在最高点附近或下降初段迎球。</div>
   </div>
   <div id="machine-detail" class="machine-detail"></div>
   <div id="preset-groups"></div>

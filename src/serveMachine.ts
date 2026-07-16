@@ -108,10 +108,17 @@ const NET_X = 1.370;
 const NET_CLEAR_Y = 0.988;
 const RPM_TO_RAD = 2 * Math.PI / 60;
 
+// The nozzle is a 180 mm cylinder centred 175 mm in front of the head
+// centre.  With the head at x=-240 mm, its front face is x=25 mm.  Spawn the
+// ball centre one radius beyond that face so it starts just outside the mouth
+// instead of inside the housing or beside the nozzle.
+const MACHINE_BALL_ORIGIN_X = 0.045;
+
 const laneZ: Record<Exclude<TargetLane, 'random'>, number> = {
-  forehand: -0.25,
+  // The receiver is at +X and faces -X: a right-handed forehand is on -Z.
+  forehand: -1.275,
   middle: -0.7625,
-  backhand: -1.275,
+  backhand: -0.25,
 };
 
 interface SimState { x: number; y: number; z: number; vx: number; vy: number; vz: number; }
@@ -244,7 +251,7 @@ export function solveLaunch(
     // clears the net after the bounce and lands on the receiver's half.
     // These launch values are calibrated to that two-bounce geometry; spin
     // and the explicit table-contact impulse create the selected kick.
-    const originX = 0.10;
+    const originX = MACHINE_BALL_ORIGIN_X;
     const originY = preset.launchHeightMm / 1000;
     const originZ = -0.7625;
     const preferredVx = Math.max(3.8, Math.min(6.7, preset.speedMps * strength));
@@ -289,7 +296,7 @@ export function solveLaunch(
     };
   }
   let originY = preset.launchHeightMm / 1000;
-  const originX = -0.18;
+  const originX = MACHINE_BALL_ORIGIN_X;
   const originZ = -0.7625;
   let vz = (targetZ - originZ) * speed / Math.max(1, targetX - originX);
   let bestVy = 0;
