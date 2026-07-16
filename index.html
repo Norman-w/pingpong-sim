@@ -31,6 +31,13 @@
   .view-buttons button { margin:0; padding:6px 3px; border:1px solid #4e5975; border-radius:6px; background:#242940; color:#cdd7ef; font-size:11px; cursor:pointer; }
   .view-buttons button:hover { background:#303851; }
   .view-buttons button.active { border-color:#ffd166; background:rgba(255,209,102,.18); color:#fff2c2; box-shadow:0 0 0 1px rgba(255,209,102,.2) inset; }
+  .quick-view-section { margin-top:10px; padding:10px; border-radius:8px; background:rgba(84,214,255,.055); }
+  .quick-view-section h3 { margin:0 0 7px; font-size:12px; color:#dce4ff; }
+  .quick-view-buttons { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:5px; }
+  .quick-view-buttons button { margin:0; padding:7px 3px; border:1px solid #4e5975; border-radius:6px; background:#242940; color:#cdd7ef; font-size:11px; cursor:pointer; }
+  .quick-view-buttons button:hover { background:#303851; }
+  .quick-view-buttons button.active { border-color:#54d6ff; background:rgba(84,214,255,.16); color:#d9f7ff; box-shadow:0 0 0 1px rgba(84,214,255,.2) inset; }
+  .quick-view-note { margin-top:6px; color:#8fa1b7; font-size:10px; line-height:1.4; }
   .tracking-actions { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:5px; margin-top:7px; }
   .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
   .tracking-actions button.secondary { border-color:#59647f; background:#242940; color:#aeb8ca; }
@@ -74,6 +81,35 @@
   .demo-legend { margin-top:8px; display:flex; gap:12px; color:#a9b3c5; }
   .demo-legend i { display:inline-block; width:18px; height:3px; margin-right:4px; vertical-align:middle; }
   .demo-metrics { margin-top:8px; padding:7px 8px; border-radius:6px; background:rgba(255,93,115,.08); color:#d7dfef; line-height:1.5; font-variant-numeric:tabular-nums; }
+  .ui-dock { position:fixed; left:16px; top:16px; z-index:30; display:grid; gap:7px; padding:7px; border:1px solid rgba(255,255,255,.1); border-radius:12px; background:rgba(17,19,38,.92); backdrop-filter:blur(14px); }
+  .ui-icon { width:40px; height:40px; display:grid; place-items:center; border:1px solid #4b5671; border-radius:9px; background:#242940; color:#aeb9cf; cursor:pointer; font-size:18px; transition:color .18s,border-color .18s,background .18s; }
+  .ui-icon .lucide { width:20px; height:20px; margin:0; }
+  .ui-icon:hover { background:#303851; color:#fff; }
+  .ui-icon.is-open { border-color:#ffd166; color:#ffe39a; background:rgba(255,209,102,.16); }
+  .ui-icon.is-active { border-color:#5ee6a8; color:#76efba; background:rgba(94,230,168,.14); }
+  .ui-icon.is-warning { border-color:#ff9f43; color:#ffc078; background:rgba(255,159,67,.14); }
+  .ui-window { position:fixed; z-index:20; color:#e8e8ee; background:rgba(17,19,38,.95); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 16px 44px rgba(0,0,0,.28); font-size:12px; }
+  .ui-window.is-closed { display:none; }
+  .window-titlebar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:34px; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,.08); cursor:grab; user-select:none; touch-action:none; }
+  .window-titlebar.is-dragging { cursor:grabbing; }
+  .window-titlebar h1, .window-titlebar h2 { margin:0; color:#fff; font-size:14px; }
+  .window-titlebar h1 .lucide, .window-titlebar h2 .lucide { width:1em; height:1em; vertical-align:-.15em; margin-right:4px; }
+  .window-minimize { width:25px; height:25px; margin:0; padding:0; border:1px solid #59647f; border-radius:5px; background:#242940; color:#dce4ff; cursor:pointer; line-height:1; }
+  .window-minimize:hover { background:#3a425b; }
+  .window-body { padding:12px; }
+  .utility-window { left:84px; top:16px; width:310px; }
+  .machine-window { left:84px; top:164px; width:390px; max-height:calc(100vh - 180px); overflow:auto; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
+  .tracking-window { left:490px; top:164px; width:360px; max-height:calc(100vh - 180px); overflow:auto; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
+  .demo-window { right:16px; bottom:16px; width:360px; }
+  .stats-window { right:16px; top:16px; min-width:125px; }
+  .stats-window .window-titlebar { padding-bottom:4px; }
+  .stats-window .window-body { padding:5px 12px 10px; }
+  .window-status { color:#8c96aa; font:11px monospace; }
+  .window-status.running { color:#5ee6a8; }
+  .machine-window .machine-header, .demo-window .demo-header { display:flex; align-items:center; justify-content:space-between; margin:0; }
+  .machine-window .machine-header h2, .demo-window .demo-header h2 { font-size:15px; color:#fff; }
+  .machine-window .window-body { padding-top:0; }
+  .demo-window .window-body { padding-top:0; }
   dialog { margin:auto; width:min(560px,calc(100vw - 32px)); color:#e9edf7; background:#171a2d; border:1px solid #59647f; border-radius:12px; padding:20px; line-height:1.6; }
   dialog::backdrop { background:rgba(4,5,12,.72); backdrop-filter:blur(3px); }
   dialog h2 { margin-bottom:8px; } dialog h3 { margin-top:12px; color:#ffd166; font-size:13px; }
@@ -83,7 +119,12 @@
   .panel .lucide, .hint .lucide { margin-right:2px; }
   button .lucide { margin-right:4px; }
   @media (max-width:700px) {
-    .machine-panel { width:calc(100vw - 32px); top:auto; bottom:12px; max-height:54vh; }
+    .ui-dock { left:8px; top:8px; }
+    .utility-window { left:64px; top:8px; width:calc(100vw - 72px); }
+    .machine-window { left:8px; top:220px; width:calc(100vw - 16px); max-height:calc(100vh - 228px); }
+    .tracking-window { left:8px; top:calc(220px + 34vh); width:calc(100vw - 16px); max-height:calc(66vh - 230px); }
+    .demo-window { display:none; }
+    .stats-window { right:8px; top:8px; }
     .preset-buttons { grid-template-columns:repeat(3, minmax(0,1fr)); }
     .stats { display:none; }
     .demo-panel { display:none; }
@@ -92,18 +133,28 @@
 </head>
 <body>
 <div id="c"></div>
-<div class="panel">
-  <h1><svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.25em"><ellipse cx="11" cy="10" rx="7" ry="9" transform="rotate(-15 11 10)"/><line x1="16" y1="17" x2="21" y2="21"/><circle cx="13" cy="7" r="1.8"/></svg> 乒乓球物理仿真</h1>
-  <div class="hint"><i data-lucide="mouse-pointer-2" class="lucide"></i> 拖动视角 | F 发一球 | P 连续 | 数字1–9快捷球路 | X 清除</div>
-  <button onclick="window.dropBall()"><i data-lucide="arrow-down" class="lucide"></i>扔一颗</button>
-  <button onclick="window.dropBalls(5)"><i data-lucide="arrow-down" class="lucide"></i>×5</button>
-  <button class="danger" onclick="window.clearBalls()"><i data-lucide="x" class="lucide"></i>清除</button>
-</div>
-<aside class="machine-panel" aria-label="发球机控制台">
-  <div class="machine-header">
-    <h2>🏓 对面发球机</h2>
-    <span id="machine-status" class="machine-status">已停止</span>
+<nav class="ui-dock" aria-label="功能窗口">
+  <button class="ui-icon" type="button" data-window-toggle="utility-window" title="工具与说明" aria-label="工具与说明"><i data-lucide="wrench"></i></button>
+  <button class="ui-icon is-open" type="button" data-window-toggle="machine-window" title="发球机与击球点" aria-label="发球机与击球点"><i data-lucide="bot"></i></button>
+  <button class="ui-icon is-open" type="button" data-window-toggle="tracking-window" title="观察与跟球" aria-label="观察与跟球"><i data-lucide="eye"></i></button>
+  <button class="ui-icon is-open" type="button" data-window-toggle="demo-window" title="专题演示" aria-label="专题演示"><i data-lucide="flask-conical"></i></button>
+  <button class="ui-icon is-open" type="button" data-window-toggle="stats-window" title="统计信息" aria-label="统计信息"><i data-lucide="bar-chart-3"></i></button>
+</nav>
+<section id="utility-window" class="ui-window utility-window is-closed" data-window="utility-window" aria-label="工具与说明">
+  <div class="window-titlebar"><h1>乒乓球物理仿真</h1><button class="window-minimize" type="button" data-window-minimize="utility-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
+  <div class="window-body">
+    <div class="hint"><i data-lucide="mouse-pointer-2" class="lucide"></i> 拖动视角 | F 发一球 | P 连续 | 数字1–9快捷球路 | X 清除</div>
+    <button onclick="window.dropBall()"><i data-lucide="arrow-down" class="lucide"></i>扔一颗</button>
+    <button onclick="window.dropBalls(5)"><i data-lucide="arrow-down" class="lucide"></i>×5</button>
+    <button class="danger" onclick="window.clearBalls()"><i data-lucide="x" class="lucide"></i>清除</button>
   </div>
+</section>
+<aside id="machine-window" class="ui-window machine-window is-open" data-window="machine-window" aria-label="发球机控制台">
+  <div class="window-titlebar"><div class="machine-header">
+    <h2><i data-lucide="bot"></i> 对面发球机</h2>
+    <span id="machine-status" class="window-status">已停止</span>
+  </div><button class="window-minimize" type="button" data-window-minimize="machine-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
+  <div class="window-body">
   <div class="machine-actions">
     <button id="machine-once" class="primary" type="button">发一球 [F]</button>
     <button id="machine-toggle" type="button">连续发球 [P]</button>
@@ -147,53 +198,73 @@
     </div>
     <label class="random-control"><input id="machine-randomize" type="checkbox" checked> 落点扰动</label>
   </div>
-  <div class="view-section" aria-label="观察者视角与站位">
-    <h3>观察身高（眼睛高度）</h3>
-    <div class="view-buttons" id="view-heights">
-      <button type="button" data-view-height="800">幼儿 0.8m</button>
-      <button type="button" data-view-height="950">儿童 0.95m</button>
-      <button type="button" data-view-height="1100">儿童 1.1m</button>
-      <button type="button" data-view-height="1350">青少年 1.35m</button>
-      <button type="button" data-view-height="1600" class="active">成人 1.6m</button>
-      <button type="button" data-view-height="1800">高个 1.8m</button>
-    </div>
-    <h3>站位</h3>
-    <div class="view-buttons" id="view-stances">
-      <button type="button" data-view-stance="near">近台</button>
-      <button type="button" data-view-stance="mid" class="active">中台</button>
-      <button type="button" data-view-stance="far">远台</button>
-      <button type="button" data-view-stance="forehand">正手位</button>
-      <button type="button" data-view-stance="middle">中路</button>
-      <button type="button" data-view-stance="backhand">反手位</button>
-    </div>
-    <h3>处理手法与击球点</h3>
-    <div class="view-buttons" id="contact-techniques">
-      <button type="button" data-contact-technique="forehand-loop" class="active">正手拉球</button>
-      <button type="button" data-contact-technique="forehand-drive">正手快攻</button>
-      <button type="button" data-contact-technique="backhand-loop">反手拧拉</button>
-      <button type="button" data-contact-technique="block">快带/挡</button>
-      <button type="button" data-contact-technique="push">搓球</button>
-      <button type="button" data-contact-technique="chop">削球</button>
-    </div>
-    <div class="tracking-actions">
-      <button id="tracking-start" type="button">跟球至击球瞬间</button>
-      <button id="tracking-continuous" class="secondary" type="button">连续跟球</button>
-      <button id="tracking-replay" class="secondary" type="button" disabled>慢放回看</button>
-      <button id="tracking-stop" class="secondary" type="button">退出跟球</button>
-    </div>
-    <button id="tracking-replay-pause" class="secondary" type="button" disabled style="width:100%;margin-top:5px">暂停回放</button>
-    <label class="tracking-speed">跟球慢放速度<input id="tracking-speed" type="range" min="0.35" max="1" value="1" step="0.05"><output id="tracking-speed-value">1.00×</output></label>
-    <div id="tracking-status" class="tracking-status"><strong>正手拉球</strong>：身体右前方，在最高点附近或下降初段迎球。</div>
-  </div>
   <div id="machine-detail" class="machine-detail"></div>
   <div id="preset-groups"></div>
   <div class="machine-footer">
     <span>已发射 <b id="machine-shot-count">0</b></span>
     <span>接球方落台 <b id="machine-land-count">0</b></span>
   </div>
+  </div>
 </aside>
-<aside class="demo-panel" aria-label="专题演示">
-  <h2>🔬 专题演示 01 · 拉球为什么更易上台</h2>
+<aside id="tracking-window" class="ui-window tracking-window is-open" data-window="tracking-window" aria-label="观察与跟球">
+  <div class="window-titlebar"><h2><i data-lucide="eye"></i> 观察与跟球</h2><button class="window-minimize" type="button" data-window-minimize="tracking-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
+  <div class="window-body">
+    <div class="view-section" aria-label="观察者视角与站位">
+      <h3>观察身高（眼睛高度）</h3>
+      <div class="view-buttons" id="view-heights">
+        <button type="button" data-view-height="800">幼儿 0.8m</button>
+        <button type="button" data-view-height="950">儿童 0.95m</button>
+        <button type="button" data-view-height="1100">儿童 1.1m</button>
+        <button type="button" data-view-height="1350">青少年 1.35m</button>
+        <button type="button" data-view-height="1600" class="active">成人 1.6m</button>
+        <button type="button" data-view-height="1800">高个 1.8m</button>
+      </div>
+      <h3>站位</h3>
+      <div class="view-buttons" id="view-stances">
+        <button type="button" data-view-stance="near">近台</button>
+        <button type="button" data-view-stance="mid" class="active">中台</button>
+        <button type="button" data-view-stance="far">远台</button>
+        <button type="button" data-view-stance="forehand">正手位</button>
+        <button type="button" data-view-stance="middle">中路</button>
+        <button type="button" data-view-stance="backhand">反手位</button>
+      </div>
+      <div class="quick-view-section" aria-label="快速视角">
+        <h3>快速切换视角</h3>
+        <div class="quick-view-buttons" id="quick-views">
+          <button type="button" data-quick-view="follow" class="active">跟球视角</button>
+          <button type="button" data-quick-view="referee">裁判视角</button>
+          <button type="button" data-quick-view="god">上帝视角</button>
+          <button type="button" data-quick-view="audience">观众席</button>
+          <button type="button" data-quick-view="endline">端线后方</button>
+          <button type="button" data-quick-view="side">侧面看台</button>
+        </div>
+        <div class="quick-view-note">快速视角只改变相机位置，不改变球的物理轨迹；选择“跟球视角”可恢复身高与站位预设。</div>
+      </div>
+      <h3>处理手法与击球点</h3>
+      <div class="view-buttons" id="contact-techniques">
+        <button type="button" data-contact-technique="forehand-loop" class="active">正手拉球</button>
+        <button type="button" data-contact-technique="forehand-drive">正手快攻</button>
+        <button type="button" data-contact-technique="backhand-loop">反手拧拉</button>
+        <button type="button" data-contact-technique="block">快带/挡</button>
+        <button type="button" data-contact-technique="push">搓球</button>
+        <button type="button" data-contact-technique="chop">削球</button>
+      </div>
+      <div class="tracking-actions">
+        <button id="tracking-start" type="button">跟球至击球瞬间</button>
+        <button id="tracking-continuous" class="secondary" type="button">连续跟球</button>
+        <button id="tracking-replay" class="secondary" type="button" disabled>慢放回看</button>
+        <button id="tracking-stop" class="secondary" type="button">退出跟球</button>
+      </div>
+      <button id="tracking-replay-pause" class="secondary" type="button" disabled style="width:100%;margin-top:5px">暂停回放</button>
+      <label class="tracking-speed">跟球慢放速度<input id="tracking-speed" type="range" min="0.35" max="1" value="1" step="0.05"><output id="tracking-speed-value">1.00×</output></label>
+      <div id="tracking-status" class="tracking-status"><strong>正手拉球</strong>：身体右前方，在最高点附近或下降初段迎球。</div>
+    </div>
+  </div>
+</aside>
+<aside id="demo-window" class="ui-window demo-window is-open" data-window="demo-window" aria-label="专题演示">
+  <div class="window-titlebar"><div class="demo-header"><h2><i data-lucide="flask-conical"></i> 专题演示</h2></div><button class="window-minimize" type="button" data-window-minimize="demo-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
+  <div class="window-body">
+  <h2>专题 01 · 拉球为什么更易上台</h2>
   <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
   <div class="demo-controls">
     <label>力量 <span id="demo-power-value">9.0 m/s</span><input id="demo-power" type="range" min="55" max="140" value="90" step="5"></label>
@@ -203,16 +274,17 @@
   <div class="demo-actions"><button id="demo-preview">更新轨迹</button><button id="demo-fire">对比发射</button></div>
   <div class="demo-legend"><span><i style="background:#b8c0cc"></i>无旋基准</span><span><i style="background:#ff5d73"></i>旋转拉球</span></div>
   <div id="demo-metrics" class="demo-metrics"></div>
+  </div>
 </aside>
 <dialog id="parameter-dialog">
   <h2 id="dialog-title">球路参数说明</h2>
   <div id="dialog-content"></div>
   <button id="dialog-close" type="button">关闭</button>
 </dialog>
-<div class="stats">
-  球数: <span id="bc">0</span><br>
-  FPS: <span id="fps">—</span>
-</div>
+<aside id="stats-window" class="ui-window stats-window is-open" data-window="stats-window" aria-label="统计信息">
+  <div class="window-titlebar"><h2><i data-lucide="bar-chart-3"></i> 统计</h2><button class="window-minimize" type="button" data-window-minimize="stats-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
+  <div class="window-body">球数: <span id="bc">0</span><br>FPS: <span id="fps">—</span></div>
+</aside>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

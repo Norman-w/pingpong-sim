@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { createIcons, MousePointer2, ArrowDown, X } from 'lucide';
+import { createIcons, MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus } from 'lucide';
 import { init as initPhysics, isReady, createBall, removeBall, clearAllBalls, getBalls, step as physicsStep, syncMeshes, getBallCount, type RapierBall } from './physics';
 import {
   SHOT_CATEGORIES,
@@ -18,7 +18,155 @@ import {
   type TargetLane,
 } from './serveMachine';
 
-createIcons({ icons: { MousePointer2, ArrowDown, X } });
+createIcons({ icons: { MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus } });
+
+// ==================== 2D window manager ====================
+const WINDOW_IDS = ['utility-window', 'machine-window', 'tracking-window', 'demo-window', 'stats-window'] as const;
+type WindowId = typeof WINDOW_IDS[number];
+const WINDOW_PREFS_KEY = 'pingpong-sim:window-preferences:v1';
+interface WindowPreferences {
+  open?: Partial<Record<WindowId, boolean>>;
+  positions?: Partial<Record<WindowId, { left: number; top: number }>>;
+}
+
+function readWindowPreferences(): WindowPreferences {
+  try {
+    return JSON.parse(localStorage.getItem(WINDOW_PREFS_KEY) ?? '{}') as WindowPreferences;
+  } catch {
+    return {};
+  }
+}
+
+function writeWindowPreferences(preferences: WindowPreferences): void {
+  try { localStorage.setItem(WINDOW_PREFS_KEY, JSON.stringify(preferences)); } catch { /* private mode */ }
+}
+
+function saveWindowPreferences(): void {
+  const preferences: WindowPreferences = { open: {}, positions: {} };
+  for (const id of WINDOW_IDS) {
+    const windowEl = document.getElementById(id);
+    if (!windowEl) continue;
+    preferences.open![id] = !windowEl.classList.contains('is-closed');
+    const left = Number.parseFloat(windowEl.style.left);
+    const top = Number.parseFloat(windowEl.style.top);
+    if (Number.isFinite(left) && Number.isFinite(top)) preferences.positions![id] = { left, top };
+  }
+  writeWindowPreferences(preferences);
+}
+
+function clampWindowPosition(windowEl: HTMLElement, left: number, top: number): void {
+  const width = windowEl.offsetWidth || windowEl.getBoundingClientRect().width;
+  const height = windowEl.offsetHeight || windowEl.getBoundingClientRect().height;
+  const margin = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - height - margin);
+  windowEl.style.left = `${Math.round(Math.min(Math.max(left, margin), maxLeft))}px`;
+  windowEl.style.top = `${Math.round(Math.min(Math.max(top, margin), maxTop))}px`;
+  windowEl.style.right = 'auto';
+  windowEl.style.bottom = 'auto';
+}
+
+function restoreWindowPreferences(): void {
+  const preferences = readWindowPreferences();
+  for (const id of WINDOW_IDS) {
+    const windowEl = document.getElementById(id);
+    if (!windowEl) continue;
+    const savedPosition = preferences.positions?.[id];
+    if (savedPosition && Number.isFinite(savedPosition.left) && Number.isFinite(savedPosition.top)) {
+      // Temporarily show a closed window so its dimensions are measurable.
+      const wasClosed = windowEl.classList.contains('is-closed');
+      if (wasClosed) windowEl.classList.remove('is-closed');
+      clampWindowPosition(windowEl, savedPosition.left, savedPosition.top);
+      if (wasClosed) windowEl.classList.add('is-closed');
+    }
+    if (typeof preferences.open?.[id] === 'boolean') {
+      windowEl.classList.toggle('is-closed', !preferences.open[id]);
+    }
+  }
+}
+
+function setWindowOpen(id: WindowId, open: boolean): void {
+  document.getElementById(id)?.classList.toggle('is-closed', !open);
+  document.querySelector<HTMLButtonElement>(`[data-window-toggle="${id}"]`)?.classList.toggle('is-open', open);
+  saveWindowPreferences();
+}
+
+function syncWindowIndicators(): void {
+  for (const id of WINDOW_IDS) {
+    const windowEl = document.getElementById(id);
+    const toggle = document.querySelector<HTMLButtonElement>(`[data-window-toggle="${id}"]`);
+    if (!windowEl || !toggle) continue;
+    const open = !windowEl.classList.contains('is-closed');
+    toggle.classList.toggle('is-open', open);
+    toggle.classList.remove('is-active', 'is-warning');
+  }
+  const machineToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="machine-window"]');
+  if (machineToggle && (machineRunning || trackingContinuous)) machineToggle.classList.add('is-active');
+  const trackingToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="tracking-window"]');
+  if (trackingToggle && (trackingSession || trackingReplayMode || trackingContinuous)) trackingToggle.classList.add('is-active');
+  const demoToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="demo-window"]');
+  if (demoToggle && demoActive) demoToggle.classList.add('is-active');
+}
+
+document.querySelectorAll<HTMLButtonElement>('[data-window-toggle]').forEach(button => {
+  button.addEventListener('click', () => {
+    const id = button.dataset.windowToggle as WindowId;
+    const windowEl = document.getElementById(id);
+    if (windowEl) setWindowOpen(id, windowEl.classList.contains('is-closed'));
+    syncWindowIndicators();
+  });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-window-minimize]').forEach(button => {
+  button.addEventListener('click', () => {
+    const id = button.dataset.windowMinimize as WindowId;
+    setWindowOpen(id, false);
+    syncWindowIndicators();
+  });
+});
+
+// Windows can be rearranged without leaving the viewport. Positions are
+// persisted so a preferred layout survives refreshes and future sessions.
+document.querySelectorAll<HTMLElement>('.ui-window').forEach(windowEl => {
+  const id = windowEl.dataset.window as WindowId;
+  const titlebar = windowEl.querySelector<HTMLElement>('.window-titlebar');
+  if (!titlebar) return;
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+  titlebar.addEventListener('pointerdown', event => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    const rect = windowEl.getBoundingClientRect();
+    dragging = true;
+    offsetX = event.clientX - rect.left;
+    offsetY = event.clientY - rect.top;
+    // Convert right/bottom anchored defaults to explicit coordinates.
+    clampWindowPosition(windowEl, rect.left, rect.top);
+    titlebar.classList.add('is-dragging');
+    titlebar.setPointerCapture(event.pointerId);
+  });
+  titlebar.addEventListener('pointermove', event => {
+    if (!dragging) return;
+    clampWindowPosition(windowEl, event.clientX - offsetX, event.clientY - offsetY);
+  });
+  const finishDrag = (event: PointerEvent) => {
+    if (!dragging) return;
+    dragging = false;
+    titlebar.classList.remove('is-dragging');
+    if (titlebar.hasPointerCapture(event.pointerId)) titlebar.releasePointerCapture(event.pointerId);
+    saveWindowPreferences();
+  };
+  titlebar.addEventListener('pointerup', finishDrag);
+  titlebar.addEventListener('pointercancel', finishDrag);
+  void id;
+});
+restoreWindowPreferences();
+window.addEventListener('resize', () => {
+  document.querySelectorAll<HTMLElement>('.ui-window:not(.is-closed)').forEach(windowEl => {
+    const rect = windowEl.getBoundingClientRect();
+    clampWindowPosition(windowEl, rect.left, rect.top);
+  });
+  saveWindowPreferences();
+});
 
 // ==================== Scene ====================
 const c = document.getElementById('c')!;
@@ -135,18 +283,51 @@ const VIEW_STANCES: Record<ViewStance, { x: number; z: number; label: string }> 
 };
 let viewHeightMm = 1600;
 let viewStance: ViewStance = 'mid';
+type QuickViewId = 'follow' | 'referee' | 'god' | 'audience' | 'endline' | 'side';
+const QUICK_VIEWS: Record<Exclude<QuickViewId, 'follow'>, { position: [number, number, number]; target: [number, number, number]; label: string }> = {
+  referee: { position: [1450, 1750, 1050], target: [1370, TABLE_TOP_Y + 120, TABLE_CENTER_Z], label: '裁判视角' },
+  god: { position: [1370, 6200, -762.5], target: [1370, TABLE_TOP_Y, -762.5], label: '上帝视角' },
+  audience: { position: [5200, 3000, 3600], target: [1370, TABLE_TOP_Y + 120, TABLE_CENTER_Z], label: '观众席' },
+  endline: { position: [4300, 1750, -762.5], target: [1370, TABLE_TOP_Y + 180, TABLE_CENTER_Z], label: '端线后方' },
+  side: { position: [1370, 1850, -4200], target: [1370, TABLE_TOP_Y + 120, TABLE_CENTER_Z], label: '侧面看台' },
+};
+let activeQuickView: QuickViewId = 'follow';
+
+function setQuickViewActive(id: QuickViewId): void {
+  activeQuickView = id;
+  document.querySelectorAll<HTMLButtonElement>('[data-quick-view]').forEach(button => {
+    button.classList.toggle('active', button.dataset.quickView === id);
+  });
+}
 
 function applyViewPreset(): void {
   const stance = VIEW_STANCES[viewStance];
   camera.position.set(stance.x, viewHeightMm, stance.z);
   controls.target.set(TABLE_CENTER_X, TABLE_TOP_Y + 180, TABLE_CENTER_Z);
   controls.update();
+  setQuickViewActive('follow');
   document.querySelectorAll<HTMLButtonElement>('[data-view-height]').forEach(button => {
     button.classList.toggle('active', Number(button.dataset.viewHeight) === viewHeightMm);
   });
   document.querySelectorAll<HTMLButtonElement>('[data-view-stance]').forEach(button => {
     button.classList.toggle('active', button.dataset.viewStance === viewStance);
   });
+}
+
+function applyQuickView(id: QuickViewId): void {
+  if (id === 'follow') {
+    applyViewPreset();
+    updateContactGuide();
+    return;
+  }
+  const preset = QUICK_VIEWS[id];
+  camera.position.set(...preset.position);
+  controls.target.set(...preset.target);
+  controls.enabled = true;
+  controls.update();
+  setQuickViewActive(id);
+  document.getElementById('tracking-status')!.innerHTML =
+    `<strong>${preset.label}</strong>：观察球台整体空间关系；物理模拟仍按正常时间推进。`;
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-view-height]').forEach(button => {
@@ -162,6 +343,9 @@ document.querySelectorAll<HTMLButtonElement>('[data-view-stance]').forEach(butto
     applyViewPreset();
     updateContactGuide();
   });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-quick-view]').forEach(button => {
+  button.addEventListener('click', () => applyQuickView(button.dataset.quickView as QuickViewId));
 });
 
 // ==================== Balls ====================
@@ -669,6 +853,7 @@ function stopTrackingReplay(): void {
   trackingReplayEl.disabled = trackingRecording.length < 2;
   trackingReplayPauseEl.disabled = true;
   trackingReplayPauseEl.textContent = '暂停回放';
+  syncWindowIndicators();
 }
 
 function startTrackingReplay(): void {
@@ -689,6 +874,7 @@ function startTrackingReplay(): void {
   document.getElementById('tracking-status')!.innerHTML =
     `<strong>慢放回看</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
     `可暂停在任意位置，也可切换第三人称视角；继续实时跟球会重新进入正常跟球相机。`;
+  syncWindowIndicators();
 }
 
 function updateTrackingReplay(deltaSeconds: number): void {
@@ -742,6 +928,7 @@ function stopTrackingDemo(resetStatus = true): void {
   document.getElementById('tracking-start')?.classList.remove('active');
   trackingContinuousEl.classList.remove('active');
   if (resetStatus) updateContactGuide(false);
+  syncWindowIndicators();
 }
 
 function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, skipSourceGlance = false): void {
@@ -795,6 +982,7 @@ async function startTrackingDemo(continuous = false): Promise<void> {
   beginTrackingBall(ball, performance.now(), true);
   trackingContinuousEl.classList.toggle('active', continuous);
   trackingNextShotAt = performance.now() + 1000 / readMachineSettings().cadence;
+  syncWindowIndicators();
 }
 
 function updateTrackingDemo(now: number, deltaSeconds: number): void {
@@ -933,6 +1121,7 @@ function setMachineRunning(running: boolean): void {
   machineToggleEl.textContent = running ? '暂停连续 [P]' : '连续发球 [P]';
   machineStatusEl.textContent = running ? '运行中' : '已停止';
   machineStatusEl.classList.toggle('running', running);
+  syncWindowIndicators();
 }
 
 resetMachineOnClear = () => {
@@ -1054,6 +1243,7 @@ function fireDemo(): void {
     const ball = spawnPhysicsBall(solution.originMm.x, solution.originMm.y, solution.originMm.z + zOffset, solution.velocityMm.x, solution.velocityMm.y, solution.velocityMm.z, i === 0 ? 0xb8c0cc : 0xff5d73);
     ball?.body.setAngvel(solution.angularVelocity, true);
   });
+  syncWindowIndicators();
 }
 demoPowerEl.addEventListener('input', updateDemo);
 demoSpinEl.addEventListener('input', updateDemo);
@@ -1062,9 +1252,11 @@ document.getElementById('demo-preview')!.addEventListener('click', () => {
   demoActive = true;
   setMachineVisible(false);
   updateDemo();
+  syncWindowIndicators();
 });
 document.getElementById('demo-fire')!.addEventListener('click', fireDemo);
 updateDemo();
+syncWindowIndicators();
 
 // ==================== Loop ====================
 let frames = 0, ft = 0, fps = 0, lastT = performance.now();
