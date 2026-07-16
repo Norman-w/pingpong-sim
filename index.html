@@ -31,11 +31,14 @@
   .view-buttons button { margin:0; padding:6px 3px; border:1px solid #4e5975; border-radius:6px; background:#242940; color:#cdd7ef; font-size:11px; cursor:pointer; }
   .view-buttons button:hover { background:#303851; }
   .view-buttons button.active { border-color:#ffd166; background:rgba(255,209,102,.18); color:#fff2c2; box-shadow:0 0 0 1px rgba(255,209,102,.2) inset; }
-  .tracking-actions { display:grid; grid-template-columns:1.35fr .65fr; gap:5px; margin-top:7px; }
+  .tracking-actions { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:5px; margin-top:7px; }
   .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
   .tracking-actions button.secondary { border-color:#59647f; background:#242940; color:#aeb8ca; }
   .tracking-status { margin-top:7px; min-height:34px; padding:6px 7px; border-radius:5px; background:rgba(84,214,255,.07); color:#aebdd1; line-height:1.45; }
   .tracking-status strong { color:#fff; }
+  .tracking-speed { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; margin-top:8px; color:#aebdd1; }
+  .tracking-speed input { width:100%; accent-color:#54d6ff; }
+  .tracking-speed output { min-width:38px; text-align:right; color:#fff; font-variant-numeric:tabular-nums; }
   .machine-control { display:grid; gap:3px; color:#aeb7ca; }
   .machine-control label { display:flex; justify-content:space-between; gap:6px; }
   .machine-control input[type="range"] { width:100%; accent-color:#ffd166; }
@@ -174,8 +177,12 @@
     </div>
     <div class="tracking-actions">
       <button id="tracking-start" type="button">跟球至击球瞬间</button>
+      <button id="tracking-continuous" class="secondary" type="button">连续跟球</button>
+      <button id="tracking-replay" class="secondary" type="button" disabled>慢放回看</button>
       <button id="tracking-stop" class="secondary" type="button">退出跟球</button>
     </div>
+    <button id="tracking-replay-pause" class="secondary" type="button" disabled style="width:100%;margin-top:5px">暂停回放</button>
+    <label class="tracking-speed">跟球慢放速度<input id="tracking-speed" type="range" min="0.35" max="1" value="1" step="0.05"><output id="tracking-speed-value">1.00×</output></label>
     <div id="tracking-status" class="tracking-status"><strong>正手拉球</strong>：身体右前方，在最高点附近或下降初段迎球。</div>
   </div>
   <div id="machine-detail" class="machine-detail"></div>
