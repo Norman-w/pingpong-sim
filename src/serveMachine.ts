@@ -1,5 +1,16 @@
-export type ShotCategory = '基础球' | '上旋进攻' | '下旋控制' | '侧旋组合' | '极限球';
+export type ShotCategory = '开局发球' | '基础球' | '上旋进攻' | '下旋控制' | '侧旋组合' | '极限球';
 export type TargetLane = 'random' | 'forehand' | 'middle' | 'backhand';
+export type PlayerLevel = 'beginner' | 'club' | 'advanced' | 'world';
+export type BallStyle = 'white' | 'yellow' | 'white-yellow-split' | 'white-yellow-eight' | 'rainbow';
+
+export const PLAYER_LEVELS: Record<PlayerLevel, {
+  label: string; speedScale: number; spinScale: number; reference: string;
+}> = {
+  beginner: { label: '业余入门', speedScale: 0.72, spinScale: 0.48, reference: '动作建立期：重控制，速度与旋转均保守。' },
+  club: { label: '业余俱乐部', speedScale: 0.88, spinScale: 0.72, reference: '稳定对练与比赛常见强度。' },
+  advanced: { label: '专业训练', speedScale: 1, spinScale: 1, reference: '以系统训练球速/转速为预设基准。' },
+  world: { label: '世界级参考', speedScale: 1.16, spinScale: 1.24, reference: '高水平上限参考；并非每一球都达到极限。' },
+};
 
 export interface ShotPreset {
   id: string;
@@ -16,6 +27,8 @@ export interface ShotPreset {
   spreadMm: number;
   color: number;
   shortcut?: string;
+  mode?: 'rally' | 'serve';
+  firstBounceMm?: number;
 }
 
 export interface MachineSettings {
@@ -23,6 +36,7 @@ export interface MachineSettings {
   cadence: number;
   targetLane: TargetLane;
   randomize: boolean;
+  playerLevel: PlayerLevel;
 }
 
 export interface LaunchSolution {
@@ -42,6 +56,12 @@ const purple = 0xa66cff;
 const gold = 0xffd166;
 
 export const SHOT_PRESETS: readonly ShotPreset[] = [
+  { id: 'serve-float-short', name: '无旋短发球', category: '开局发球', mode: 'serve', description: '本方近网先落台，过网后在对方近网区二跳。', speedMps: 4.8, topRpm: 0, sideRpm: 0, corkRpm: 0, firstBounceMm: 720, targetDepthMm: 1740, launchHeightMm: 1050, cadence: 0.8, spreadMm: 30, color: orange },
+  { id: 'serve-back-short', name: '下旋短发球', category: '开局发球', mode: 'serve', description: '本方近网一跳、对方近网二跳的低短下旋。', speedMps: 4.7, topRpm: -3200, sideRpm: 0, corkRpm: 0, firstBounceMm: 760, targetDepthMm: 1780, launchHeightMm: 1050, cadence: 0.8, spreadMm: 35, color: blue },
+  { id: 'serve-side-back', name: '侧下旋发球', category: '开局发球', mode: 'serve', description: '本方中短一跳，过网后向左侧拐并带下旋。', speedMps: 5.0, topRpm: -2800, sideRpm: 2400, corkRpm: 900, firstBounceMm: 720, targetDepthMm: 1940, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
+  { id: 'serve-side-top', name: '侧上旋发球', category: '开局发球', mode: 'serve', description: '本方中短一跳，过网后二跳向前并向右窜。', speedMps: 5.2, topRpm: 2200, sideRpm: -2600, corkRpm: -900, firstBounceMm: 700, targetDepthMm: 2100, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
+  { id: 'serve-reverse', name: '逆旋转发球', category: '开局发球', mode: 'serve', description: '逆向侧下旋，二跳方向与常规侧旋相反。', speedMps: 5.0, topRpm: -2500, sideRpm: -2900, corkRpm: -1000, firstBounceMm: 720, targetDepthMm: 1940, launchHeightMm: 1060, cadence: 0.7, spreadMm: 50, color: purple },
+  { id: 'serve-fast-long', name: '奔球/急长', category: '开局发球', mode: 'serve', description: '本方较深一跳、低平过网，第二跳压接球方端线。', speedMps: 6.4, topRpm: 1500, sideRpm: 800, corkRpm: 300, firstBounceMm: 850, targetDepthMm: 2550, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: gold },
   { id: 'float-short', name: '无旋短球', category: '基础球', description: '低速、近网落点，练习上步和小球处理。', speedMps: 4.2, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 1740, launchHeightMm: 1080, cadence: 1.1, spreadMm: 35, color: orange, shortcut: '1' },
   { id: 'float-long', name: '无旋长球', category: '基础球', description: '中速长落点，轨迹最接近纯抛体基准。', speedMps: 6.5, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 2480, launchHeightMm: 1120, cadence: 1.2, spreadMm: 45, color: orange, shortcut: '2' },
   { id: 'drive', name: '平击快攻', category: '基础球', description: '速度优先、旋转较少的快速进攻球。', speedMps: 9.0, topRpm: 900, sideRpm: 0, corkRpm: 0, targetDepthMm: 2420, launchHeightMm: 1190, cadence: 1.3, spreadMm: 55, color: orange, shortcut: '3' },
@@ -71,13 +91,15 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
 ];
 
 export const SHOT_CATEGORIES: readonly ShotCategory[] = [
-  '基础球', '上旋进攻', '下旋控制', '侧旋组合', '极限球',
+  '开局发球', '基础球', '上旋进攻', '下旋控制', '侧旋组合', '极限球',
 ];
 
 const BALL_RADIUS = 0.020;
 const BALL_MASS = 0.0027;
 const BALL_AREA = Math.PI * BALL_RADIUS ** 2;
 const BALL_VOLUME = (4 / 3) * Math.PI * BALL_RADIUS ** 3;
+const BALL_INERTIA = (2 / 3) * BALL_MASS * BALL_RADIUS ** 2;
+const BALL_TABLE_FRICTION = 0.25;
 const AIR_DENSITY = 1.204;
 const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
@@ -95,6 +117,35 @@ const laneZ: Record<Exclude<TargetLane, 'random'>, number> = {
 interface SimState { x: number; y: number; z: number; vx: number; vy: number; vz: number; }
 interface SimResult { state: SimState; time: number; netY: number; }
 
+function advanceSimulation(
+  state: SimState,
+  angularVelocity: { x: number; y: number; z: number },
+  dt: number,
+): void {
+  const speed = Math.hypot(state.vx, state.vy, state.vz);
+  const dragScale = speed > 1e-6
+    ? -0.5 * AIR_DENSITY * DRAG_COEFFICIENT * BALL_AREA * speed / BALL_MASS
+    : 0;
+  let ax = dragScale * state.vx;
+  let ay = -GRAVITY + dragScale * state.vy;
+  let az = dragScale * state.vz;
+  const crossX = angularVelocity.y * state.vz - angularVelocity.z * state.vy;
+  const crossY = angularVelocity.z * state.vx - angularVelocity.x * state.vz;
+  const crossZ = angularVelocity.x * state.vy - angularVelocity.y * state.vx;
+  const crossMagnitude = Math.hypot(crossX, crossY, crossZ);
+  if (crossMagnitude > 1e-5 && speed > 0.1) {
+    const spinParameter = BALL_RADIUS * crossMagnitude / (speed * speed);
+    const liftCoefficient = 0.5 * (1 - Math.exp(-1.8 * spinParameter));
+    const liftAcceleration = 0.5 * AIR_DENSITY * BALL_AREA * liftCoefficient * speed * speed / BALL_MASS;
+    const scale = liftAcceleration / crossMagnitude;
+    ax += scale * crossX;
+    ay += scale * crossY;
+    az += scale * crossZ;
+  }
+  state.vx += ax * dt; state.vy += ay * dt; state.vz += az * dt;
+  state.x += state.vx * dt; state.y += state.vy * dt; state.z += state.vz * dt;
+}
+
 function simulateToTarget(
   origin: SimState,
   angularVelocity: { x: number; y: number; z: number },
@@ -107,32 +158,7 @@ function simulateToTarget(
   let recordedNet = false;
 
   while (state.x < targetX && time < 1.5) {
-    const speed = Math.hypot(state.vx, state.vy, state.vz);
-    const dragScale = speed > 1e-6
-      ? -0.5 * AIR_DENSITY * DRAG_COEFFICIENT * BALL_AREA * speed / BALL_MASS
-      : 0;
-    let ax = dragScale * state.vx;
-    let ay = -GRAVITY + dragScale * state.vy;
-    let az = dragScale * state.vz;
-
-    const spin = Math.hypot(angularVelocity.x, angularVelocity.y, angularVelocity.z);
-    if (spin > 1 && speed > 0.1) {
-      const coefficient = Math.max(0, Math.min(
-        0.5,
-        0.1 * speed / (BALL_RADIUS * spin) - 0.001,
-      ));
-      const scale = AIR_DENSITY * BALL_VOLUME * coefficient / BALL_MASS;
-      ax += scale * (angularVelocity.y * state.vz - angularVelocity.z * state.vy);
-      ay += scale * (angularVelocity.z * state.vx - angularVelocity.x * state.vz);
-      az += scale * (angularVelocity.x * state.vy - angularVelocity.y * state.vx);
-    }
-
-    state.vx += ax * dt;
-    state.vy += ay * dt;
-    state.vz += az * dt;
-    state.x += state.vx * dt;
-    state.y += state.vy * dt;
-    state.z += state.vz * dt;
+    advanceSimulation(state, angularVelocity, dt);
     time += dt;
 
     if (!recordedNet && state.x >= NET_X) {
@@ -142,6 +168,51 @@ function simulateToTarget(
   }
 
   return { state, time, netY };
+}
+
+function evaluateServe(
+  origin: SimState,
+  angularVelocity: { x: number; y: number; z: number },
+): { firstX?: number; secondX?: number; netY: number } {
+  const state = { ...origin };
+  const w = { ...angularVelocity };
+  const hits: number[] = [];
+  let netY = 0;
+  let sawNet = false;
+  const dt = 1 / 480;
+  for (let t = 0; t < 1.5 && state.x < 3.2 && state.y > 0; t += dt) {
+    const previousY = state.y;
+    advanceSimulation(state, w, dt);
+    if (!sawNet && hits.length > 0 && state.x >= NET_X) { netY = state.y; sawNet = true; }
+    if (
+      state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
+      state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
+    ) {
+      hits.push(state.x);
+      const impact = Math.abs(state.vy);
+      const restitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impact));
+      const contactVx = state.vx + w.z * BALL_RADIUS;
+      const contactVz = state.vz - w.x * BALL_RADIUS;
+      const contactSpeed = Math.hypot(contactVx, contactVz);
+      let impulseX = 0;
+      let impulseZ = 0;
+      if (contactSpeed > 1e-6) {
+        const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
+        const normalImpulse = BALL_MASS * (1 + restitution) * impact;
+        const impulseMagnitude = Math.min(stickingImpulse, BALL_TABLE_FRICTION * normalImpulse);
+        impulseX = -impulseMagnitude * contactVx / contactSpeed;
+        impulseZ = -impulseMagnitude * contactVz / contactSpeed;
+      }
+      state.y = TABLE_CONTACT_Y;
+      state.vy = impact * restitution;
+      state.vx += impulseX / BALL_MASS;
+      state.vz += impulseZ / BALL_MASS;
+      w.x -= BALL_RADIUS * impulseZ / BALL_INERTIA;
+      w.z += BALL_RADIUS * impulseX / BALL_INERTIA;
+      if (hits.length >= 2) break;
+    }
+  }
+  return { firstX: hits[0], secondX: hits[1], netY };
 }
 
 function randomTargetZ(settings: MachineSettings, spreadMm: number): number {
@@ -157,8 +228,9 @@ export function solveLaunch(
   settings: MachineSettings,
 ): LaunchSolution {
   const strength = Math.max(0.6, Math.min(1.4, settings.strength));
-  const speed = preset.speedMps * strength;
-  const spinScale = 0.75 + 0.25 * strength;
+  const level = PLAYER_LEVELS[settings.playerLevel] ?? PLAYER_LEVELS.advanced;
+  const speed = preset.speedMps * strength * level.speedScale;
+  const spinScale = (0.75 + 0.25 * strength) * level.spinScale;
   const angularVelocity = {
     x: preset.corkRpm * spinScale * RPM_TO_RAD,
     y: preset.sideRpm * spinScale * RPM_TO_RAD,
@@ -167,6 +239,55 @@ export function solveLaunch(
   const targetX = preset.targetDepthMm / 1000 +
     (settings.randomize ? (Math.random() - 0.5) * preset.spreadMm / 1500 : 0);
   const targetZ = randomTargetZ(settings, preset.spreadMm);
+  if (preset.mode === 'serve') {
+    // A legal table-tennis serve first descends onto the server's half, then
+    // clears the net after the bounce and lands on the receiver's half.
+    // These launch values are calibrated to that two-bounce geometry; spin
+    // and the explicit table-contact impulse create the selected kick.
+    const originX = 0.10;
+    const originY = preset.launchHeightMm / 1000;
+    const originZ = -0.7625;
+    const preferredVx = Math.max(3.8, Math.min(6.7, preset.speedMps * strength));
+    const firstTargetX = (preset.firstBounceMm ?? 720) / 1000;
+    let vy = -2.2;
+    let vx = preferredVx;
+    let vz = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let speedStep = -8; speedStep <= 8; speedStep += 1) {
+      const candidateVx = Math.max(3.5, Math.min(7.0, preferredVx + speedStep * 0.12));
+      const travel = Math.max(0.32, (targetX - originX) / candidateVx);
+      const candidateVz = (targetZ - originZ) / travel;
+      for (let i = 0; i <= 70; i += 1) {
+        const candidateVy = -0.65 - i * 0.055;
+        const outcome = evaluateServe(
+          { x: originX, y: originY, z: originZ, vx: candidateVx, vy: candidateVy, vz: candidateVz },
+          angularVelocity,
+        );
+        let score = outcome.secondX === undefined ? 50 : Math.abs(outcome.secondX - targetX) * 2;
+        score += outcome.firstX === undefined ? 50 : Math.abs(outcome.firstX - firstTargetX) * 1.3;
+        if (outcome.firstX !== undefined && outcome.firstX >= NET_X) score += 50;
+        if (outcome.secondX !== undefined && (outcome.secondX <= NET_X || outcome.secondX >= 2.72)) score += 50;
+        if (outcome.netY < 0.965) score += (0.965 - outcome.netY) * 30;
+        if (outcome.netY > 1.12) score += (outcome.netY - 1.12) * 2;
+        score += Math.abs(candidateVx - preferredVx) * 0.035;
+        if (score < bestScore) {
+          bestScore = score; vx = candidateVx; vy = candidateVy; vz = candidateVz;
+        }
+      }
+    }
+    const predicted = evaluateServe(
+      { x: originX, y: originY, z: originZ, vx, vy, vz }, angularVelocity,
+    );
+    return {
+      originMm: { x: originX * 1000, y: originY * 1000, z: originZ * 1000 },
+      velocityMm: { x: vx * 1000, y: vy * 1000, z: vz * 1000 },
+      angularVelocity,
+      targetMm: { x: targetX * 1000, y: TABLE_CONTACT_Y * 1000, z: targetZ * 1000 },
+      speedMps: Math.hypot(vx, vy, vz),
+      spinRpm: Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) * spinScale,
+      netClearanceMm: (predicted.netY - 0.937) * 1000,
+    };
+  }
   let originY = preset.launchHeightMm / 1000;
   const originX = -0.18;
   const originZ = -0.7625;
@@ -218,6 +339,53 @@ export function solveLaunch(
     spinRpm: Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) * spinScale,
     netClearanceMm: (result.netY - 0.937) * 1000,
   };
+}
+
+export function sampleTrajectory(
+  solution: LaunchSolution,
+  seconds = 1.25,
+): Array<{ x: number; y: number; z: number }> {
+  const w = { ...solution.angularVelocity };
+  const state: SimState = {
+    x: solution.originMm.x / 1000, y: solution.originMm.y / 1000,
+    z: solution.originMm.z / 1000, vx: solution.velocityMm.x / 1000,
+    vy: solution.velocityMm.y / 1000, vz: solution.velocityMm.z / 1000,
+  };
+  const points: Array<{ x: number; y: number; z: number }> = [];
+  const dt = 1 / 240;
+  let bounces = 0;
+  for (let t = 0; t < seconds && state.y > 0 && state.x < 3.35 && Math.abs(state.z) < 2.2; t += dt) {
+    const previousY = state.y;
+    advanceSimulation(state, w, dt);
+    if (
+      bounces < 3 && state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
+      state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
+    ) {
+      const impact = Math.abs(state.vy);
+      const restitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impact));
+      const contactVx = state.vx + w.z * BALL_RADIUS;
+      const contactVz = state.vz - w.x * BALL_RADIUS;
+      const contactSpeed = Math.hypot(contactVx, contactVz);
+      let impulseX = 0;
+      let impulseZ = 0;
+      if (contactSpeed > 1e-6) {
+        const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
+        const normalImpulse = BALL_MASS * (1 + restitution) * impact;
+        const impulseMagnitude = Math.min(stickingImpulse, BALL_TABLE_FRICTION * normalImpulse);
+        impulseX = -impulseMagnitude * contactVx / contactSpeed;
+        impulseZ = -impulseMagnitude * contactVz / contactSpeed;
+      }
+      state.y = TABLE_CONTACT_Y;
+      state.vy = impact * restitution;
+      state.vx += impulseX / BALL_MASS;
+      state.vz += impulseZ / BALL_MASS;
+      w.x -= BALL_RADIUS * impulseZ / BALL_INERTIA;
+      w.z += BALL_RADIUS * impulseX / BALL_INERTIA;
+      bounces += 1;
+    }
+    points.push({ x: state.x * 1000, y: state.y * 1000, z: state.z * 1000 });
+  }
+  return points;
 }
 
 export function getPreset(id: string): ShotPreset {

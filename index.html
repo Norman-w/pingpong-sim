@@ -32,6 +32,12 @@
   .random-control input { accent-color:#ffd166; }
   .machine-detail { margin:10px 0; padding:9px 10px; color:#adb8cb; line-height:1.55; background:rgba(255,209,102,0.06); border-left:2px solid #ffd166; border-radius:4px; }
   .machine-detail strong { color:#fff; }
+  .spin-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; margin-top:7px; }
+  .spin-chip { background:rgba(255,255,255,.055); border-radius:5px; padding:5px 6px; color:#9ca8bd; }
+  .spin-chip b { float:right; color:#fff; font-variant-numeric:tabular-nums; }
+  .info-button { margin-top:7px; border:1px solid #65708c; color:#cdd7ef; background:#252a40; border-radius:5px; padding:5px 8px; cursor:pointer; }
+  .preset-button::after { content:attr(data-tip); display:none; position:fixed; left:420px; top:170px; width:260px; padding:8px; border-radius:6px; background:#111426; color:#e8ecf7; border:1px solid #4b5671; z-index:40; pointer-events:none; text-align:left; line-height:1.45; }
+  .preset-button:hover::after { display:block; }
   .preset-group { margin-top:10px; }
   .preset-group h3 { color:#8994aa; font-size:11px; font-weight:600; margin-bottom:5px; }
   .preset-buttons { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:5px; }
@@ -42,6 +48,22 @@
   .machine-footer { display:flex; justify-content:space-between; margin-top:11px; padding-top:8px; border-top:1px solid rgba(255,255,255,.07); color:#8993a8; font:10px monospace; }
   .stats { position:fixed; top:16px; right:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 16px; color:#e0e0e0; z-index:10; font-size:12px; font-family:monospace; line-height:1.8; }
   .stats span { color:#ffd166; }
+  .demo-panel { position:fixed; right:16px; bottom:16px; width:360px; padding:14px; color:#e8e8ee; background:rgba(17,19,38,.94); border:1px solid rgba(255,255,255,.1); border-radius:12px; z-index:12; font-size:12px; }
+  .demo-panel h2 { font-size:14px; margin-bottom:5px; }
+  .demo-panel p { color:#9da9bd; line-height:1.45; }
+  .demo-controls { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin:10px 0; }
+  .demo-controls label { display:grid; gap:3px; color:#bdc7d8; }
+  .demo-controls input { width:100%; accent-color:#ff5d73; }
+  .demo-actions { display:flex; gap:7px; }
+  .demo-actions button { flex:1; padding:7px; border-radius:6px; cursor:pointer; border:1px solid #ff697d; background:rgba(255,93,115,.14); color:#ff9aaa; }
+  .demo-legend { margin-top:8px; display:flex; gap:12px; color:#a9b3c5; }
+  .demo-legend i { display:inline-block; width:18px; height:3px; margin-right:4px; vertical-align:middle; }
+  .demo-metrics { margin-top:8px; padding:7px 8px; border-radius:6px; background:rgba(255,93,115,.08); color:#d7dfef; line-height:1.5; font-variant-numeric:tabular-nums; }
+  dialog { margin:auto; width:min(560px,calc(100vw - 32px)); color:#e9edf7; background:#171a2d; border:1px solid #59647f; border-radius:12px; padding:20px; line-height:1.6; }
+  dialog::backdrop { background:rgba(4,5,12,.72); backdrop-filter:blur(3px); }
+  dialog h2 { margin-bottom:8px; } dialog h3 { margin-top:12px; color:#ffd166; font-size:13px; }
+  dialog p, dialog li { color:#b9c3d5; } dialog ul { padding-left:20px; }
+  dialog button { margin-top:14px; padding:7px 14px; border-radius:6px; border:1px solid #66718d; background:#2a3048; color:#fff; cursor:pointer; }
   .lucide { width:1em; height:1em; vertical-align:-0.125em; stroke-width:1.5; }
   .panel .lucide, .hint .lucide { margin-right:2px; }
   button .lucide { margin-right:4px; }
@@ -49,6 +71,7 @@
     .machine-panel { width:calc(100vw - 32px); top:auto; bottom:12px; max-height:54vh; }
     .preset-buttons { grid-template-columns:repeat(3, minmax(0,1fr)); }
     .stats { display:none; }
+    .demo-panel { display:none; }
   }
 </style>
 </head>
@@ -76,6 +99,25 @@
       <input id="machine-strength" type="range" min="60" max="140" step="5" value="100">
     </div>
     <div class="machine-control">
+      <label for="machine-level"><span>选手强度参考</span></label>
+      <select id="machine-level">
+        <option value="beginner">业余入门</option>
+        <option value="club" selected>业余俱乐部</option>
+        <option value="advanced">专业训练</option>
+        <option value="world">世界级参考</option>
+      </select>
+    </div>
+    <div class="machine-control">
+      <label for="ball-style"><span>球体样式</span></label>
+      <select id="ball-style">
+        <option value="white">纯白</option>
+        <option value="yellow">纯黄</option>
+        <option value="white-yellow-split">白黄双拼</option>
+        <option value="white-yellow-eight">白黄8拼</option>
+        <option value="rainbow" selected>彩球</option>
+      </select>
+    </div>
+    <div class="machine-control">
       <label for="machine-cadence"><span>频率</span><span id="cadence-value">1.2 球/秒</span></label>
       <input id="machine-cadence" type="range" min="0.4" max="3" step="0.1" value="1.2">
     </div>
@@ -97,6 +139,23 @@
     <span>接球方落台 <b id="machine-land-count">0</b></span>
   </div>
 </aside>
+<aside class="demo-panel" aria-label="专题演示">
+  <h2>🔬 专题演示 01 · 拉球为什么更易上台</h2>
+  <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
+  <div class="demo-controls">
+    <label>力量 <span id="demo-power-value">9.0 m/s</span><input id="demo-power" type="range" min="55" max="140" value="90" step="5"></label>
+    <label>上旋 <span id="demo-spin-value">4500 rpm</span><input id="demo-spin" type="range" min="0" max="8000" value="4500" step="250"></label>
+    <label>侧旋 <span id="demo-side-value">0 rpm</span><input id="demo-side" type="range" min="-4000" max="4000" value="0" step="250"></label>
+  </div>
+  <div class="demo-actions"><button id="demo-preview">更新轨迹</button><button id="demo-fire">对比发射</button></div>
+  <div class="demo-legend"><span><i style="background:#b8c0cc"></i>无旋基准</span><span><i style="background:#ff5d73"></i>旋转拉球</span></div>
+  <div id="demo-metrics" class="demo-metrics"></div>
+</aside>
+<dialog id="parameter-dialog">
+  <h2 id="dialog-title">球路参数说明</h2>
+  <div id="dialog-content"></div>
+  <button id="dialog-close" type="button">关闭</button>
+</dialog>
 <div class="stats">
   球数: <span id="bc">0</span><br>
   FPS: <span id="fps">—</span>

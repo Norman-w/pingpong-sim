@@ -23,6 +23,10 @@ const TABLE_MIN_X = BALL_RADIUS;
 const TABLE_MAX_X = 2.740 - BALL_RADIUS;
 const TABLE_MIN_Z = -1.525 + BALL_RADIUS;
 const TABLE_MAX_Z = -BALL_RADIUS;
+const VENUE_LENGTH = 14;
+const VENUE_WIDTH = 7;
+const BARRIER_HEIGHT = 0.7;
+const BARRIER_THICKNESS = 0.038;
 
 // A rigid-body solver's Coulomb friction does not dissipate pure rolling.
 // Real balls lose energy through shell/table deformation and contact hysteresis.
@@ -105,14 +109,43 @@ export async function init(): Promise<void> {
 
   const floorBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(8, 0.001, 8)
-      .setTranslation(0, -0.003, 0)
+    // Match the visible 14 m × 7 m competition floor. Its top is at the
+    // rubber-mat plane (y=-5 mm), so a resting ball remains visible instead
+    // of sinking below the rendered ground.
+    RAPIER.ColliderDesc.cuboid(VENUE_LENGTH / 2, 0.001, VENUE_WIDTH / 2)
+      .setTranslation(1.37, -0.006, -0.7625)
       .setFriction(0.8)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
       .setRestitution(0.35)
       .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Multiply),
     floorBody,
   );
+
+  // The visual competition barriers are also solid bodies. They sit around
+  // the 14 m × 7 m free zone and stop balls that reach the boundary instead
+  // of allowing them to pass through the decorative meshes.
+  const barrierSpecs: Array<[
+    { x: number; y: number; z: number },
+    { x: number; y: number; z: number },
+  ]> = [
+    [{ x: 1.37, y: BARRIER_HEIGHT / 2, z: -0.7625 - VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
+    [{ x: 1.37, y: BARRIER_HEIGHT / 2, z: -0.7625 + VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
+    [{ x: 1.37 - VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
+    [{ x: 1.37 + VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
+  ];
+  for (const [position, halfExtents] of barrierSpecs) {
+    const barrierBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z),
+    );
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+        .setFriction(0.65)
+        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
+        .setRestitution(0.18)
+        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Multiply),
+      barrierBody,
+    );
+  }
 
   readyFlag = true;
   console.log('[physics] SI world ready at 240 Hz');
@@ -136,19 +169,22 @@ function applyAerodynamics(): void {
     let fy = dragScale * v.y;
     let fz = dragScale * v.z;
 
-    // Empirical table-tennis Magnus model used for spin-dependent flight.
-    // Direction is omega x velocity (equivalent to -velocity x omega).
-    const spin = Math.hypot(w.x, w.y, w.z);
-    if (spin > 1 && speed > 0.1) {
-      const magnusCoefficient = THREE.MathUtils.clamp(
-        0.1 * speed / (BALL_RADIUS * spin) - 0.001,
-        0,
-        0.5,
-      );
-      const magnusScale = AIR_DENSITY * BALL_VOLUME * magnusCoefficient;
-      fx += magnusScale * (w.y * v.z - w.z * v.y);
-      fy += magnusScale * (w.z * v.x - w.x * v.z);
-      fz += magnusScale * (w.x * v.y - w.y * v.x);
+    // Magnus lift: F = 1/2 rho A Cl v².  Cl is driven by the
+    // dimensionless spin parameter S = r * omega_perpendicular / v.
+    // The previous inverse-omega coefficient cancelled most of the visible
+    // difference between weak and heavy spin.
+    const crossX = w.y * v.z - w.z * v.y;
+    const crossY = w.z * v.x - w.x * v.z;
+    const crossZ = w.x * v.y - w.y * v.x;
+    const crossMagnitude = Math.hypot(crossX, crossY, crossZ);
+    if (crossMagnitude > 1e-5 && speed > 0.1) {
+      const spinParameter = BALL_RADIUS * crossMagnitude / (speed * speed);
+      const liftCoefficient = 0.5 * (1 - Math.exp(-1.8 * spinParameter));
+      const liftForce = 0.5 * AIR_DENSITY * BALL_AREA * liftCoefficient * speed * speed;
+      const liftScale = liftForce / crossMagnitude;
+      fx += liftScale * crossX;
+      fy += liftScale * crossY;
+      fz += liftScale * crossZ;
     }
 
     ball.body.addForce({ x: fx, y: fy, z: fz }, true);
