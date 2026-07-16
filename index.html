@@ -90,7 +90,7 @@
   .ui-icon.is-warning { border-color:#ff9f43; color:#ffc078; background:rgba(255,159,67,.14); }
   .ui-window { position:fixed; z-index:20; color:#e8e8ee; background:rgba(17,19,38,.95); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 16px 44px rgba(0,0,0,.28); font-size:12px; }
   .ui-window.is-closed { display:none; }
-  .window-titlebar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:34px; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,.08); cursor:grab; user-select:none; touch-action:none; }
+  .window-titlebar { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:34px; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,.08); background:rgba(17,19,38,.98); cursor:grab; user-select:none; touch-action:none; }
   .window-titlebar.is-dragging { cursor:grabbing; }
   .window-titlebar h1, .window-titlebar h2 { margin:0; color:#fff; font-size:14px; }
   .window-titlebar h1 .lucide, .window-titlebar h2 .lucide { width:1em; height:1em; vertical-align:-.15em; margin-right:4px; }
