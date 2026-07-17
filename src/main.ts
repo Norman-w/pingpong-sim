@@ -278,6 +278,20 @@ controls.target.copy(CTR); controls.update();
 type ViewStance = 'near' | 'mid' | 'far' | 'forehand' | 'middle' | 'backhand';
 type StanceMode = 'fixed' | 'auto';
 interface StancePose { x: number; z: number; label: string; }
+interface ReceiverProfile {
+  label: string;
+  reactionMs: number;
+  moveSpeedMmPerSec: number;
+  lateralReachMm: number;
+  reachAllowanceMm: number;
+}
+const RECEIVER_LEVEL_KEY = 'pingpong-receiver-level-v1';
+const RECEIVER_PROFILES: Record<PlayerLevel, ReceiverProfile> = {
+  beginner: { label: '业余入门', reactionMs: 350, moveSpeedMmPerSec: 1200, lateralReachMm: 260, reachAllowanceMm: 220 },
+  club: { label: '业余俱乐部', reactionMs: 250, moveSpeedMmPerSec: 1600, lateralReachMm: 330, reachAllowanceMm: 280 },
+  advanced: { label: '专业训练', reactionMs: 170, moveSpeedMmPerSec: 2100, lateralReachMm: 390, reachAllowanceMm: 340 },
+  world: { label: '世界级参考', reactionMs: 120, moveSpeedMmPerSec: 2600, lateralReachMm: 450, reachAllowanceMm: 400 },
+};
 const VIEW_STANCES: Record<ViewStance, { x: number; z: number; label: string }> = {
   near: { x: 3050, z: -762.5, label: '近台' },
   mid: { x: 3600, z: -762.5, label: '中台' },
@@ -292,6 +306,12 @@ const STANCE_MODE_KEY = 'pingpong-stance-mode-v1';
 let stanceMode: StanceMode = (() => {
   try { return localStorage.getItem(STANCE_MODE_KEY) === 'auto' ? 'auto' : 'fixed'; }
   catch { return 'fixed'; }
+})();
+let receiverLevel: PlayerLevel = (() => {
+  try {
+    const saved = localStorage.getItem(RECEIVER_LEVEL_KEY) as PlayerLevel | null;
+    return saved && saved in RECEIVER_PROFILES ? saved : 'club';
+  } catch { return 'club'; }
 })();
 let autoContactZ = TABLE_CENTER_Z;
 type QuickViewId = 'follow' | 'referee' | 'god' | 'audience' | 'endline' | 'side';
@@ -506,6 +526,7 @@ const strengthEl = document.getElementById('machine-strength') as HTMLInputEleme
 const cadenceEl = document.getElementById('machine-cadence') as HTMLInputElement;
 const laneEl = document.getElementById('machine-lane') as HTMLSelectElement;
 const levelEl = document.getElementById('machine-level') as HTMLSelectElement;
+const receiverLevelEl = document.getElementById('receiver-level') as HTMLSelectElement;
 const randomizeEl = document.getElementById('machine-randomize') as HTMLInputElement;
 const ballStyleEl = document.getElementById('ball-style') as HTMLSelectElement;
 const strengthValueEl = document.getElementById('strength-value')!;
@@ -602,7 +623,6 @@ const CONTACT_TECHNIQUES: Record<ContactTechnique, ContactTechniqueSpec> = {
 };
 let contactTechnique: ContactTechnique = 'forehand-loop';
 const TABLE_TECHNIQUES = new Set<ContactTechnique>(['push', 'drop-shot', 'long-push', 'lift', 'forehand-flick', 'backhand-flick']);
-const AUTO_STANCE_MOVE_SPEED_MM_PER_SEC = 1450;
 const TABLE_CONTACT_AFTER_BOUNCE_MM: Record<ContactTechnique, number> = {
   'forehand-loop': 0,
   'forehand-drive': 0,
@@ -640,6 +660,25 @@ function tableTechniqueContactX(technique: ContactTechnique): number {
 
 function persistStanceMode(): void {
   try { localStorage.setItem(STANCE_MODE_KEY, stanceMode); } catch { /* private mode */ }
+}
+
+function currentReceiverProfile(): ReceiverProfile {
+  return RECEIVER_PROFILES[receiverLevel];
+}
+
+function receivePreparationMs(technique: ContactTechnique): number {
+  if (technique === 'block' || technique === 'punch') return 70;
+  if (TABLE_TECHNIQUES.has(technique)) return 90;
+  if (technique === 'forehand-drive' || technique === 'backhand-loop') return 120;
+  if (technique === 'forehand-loop' || technique === 'counter-loop' || technique === 'chop') return 160;
+  return 130;
+}
+
+function updateReceiverLevelDisplay(): void {
+  const profile = currentReceiverProfile();
+  receiverLevelEl.value = receiverLevel;
+  document.getElementById('receiver-level-status')!.innerHTML =
+    `<strong>${profile.label}</strong>：反应约 ${profile.reactionMs} ms · 自动步速 ${(profile.moveSpeedMmPerSec / 1000).toFixed(1)} m/s · 横向触及 ${profile.lateralReachMm} mm`;
 }
 
 function configuredContactZ(): number {
@@ -702,16 +741,21 @@ function showReceiveFailure(reason: string): void {
 
 function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, tableImpacts: number, remainingSeconds = 0): string | null {
   const spec = CONTACT_TECHNIQUES[contactTechnique];
+  const receiver = currentReceiverProfile();
   const receiveBounceCount = requiredReceiveBounceCount();
   if (TABLE_TECHNIQUES.has(contactTechnique) && tableImpacts > receiveBounceCount) {
     return '错过接球方落台后、下一跳前的台内击球时机';
   }
+  const longitudinalOvershoot = ballPoint.x - guide.x;
+  if (longitudinalOvershoot > 380) {
+    return `反应偏慢，球已越过建议击球位置 ${Math.round(longitudinalOvershoot)} mm`;
+  }
   const lateralError = Math.abs(ballPoint.z - guide.z);
-  if (lateralError > 340) return `横向差 ${Math.round(lateralError)} mm，球已超出该手法的可触及范围`;
+  if (lateralError > receiver.lateralReachMm) return `横向差 ${Math.round(lateralError)} mm，球已超出${receiver.label}的可触及范围`;
   if (stanceMode === 'auto') {
     const pose = effectiveStancePose();
     const unfinishedMove = Math.hypot(camera.position.x - pose.x, camera.position.z - pose.z);
-    const reachableMovement = remainingSeconds * AUTO_STANCE_MOVE_SPEED_MM_PER_SEC + 280;
+    const reachableMovement = remainingSeconds * receiver.moveSpeedMmPerSec + receiver.reachAllowanceMm;
     if (unfinishedMove > reachableMovement) return `移动还差 ${Math.round(unfinishedMove)} mm，未能及时到达${pose.label}`;
   } else {
     const forwardReach = Math.abs(camera.position.x - guide.x);
@@ -752,7 +796,7 @@ function moveAutomaticStanceForBall(ballPoint: THREE.Vector3, velocity: { x: num
     }
   }
   const pose = effectiveStancePose();
-  const maximumStep = AUTO_STANCE_MOVE_SPEED_MM_PER_SEC * deltaSeconds;
+  const maximumStep = currentReceiverProfile().moveSpeedMmPerSec * deltaSeconds;
   const dx = pose.x - camera.position.x;
   const dz = pose.z - camera.position.z;
   const distance = Math.hypot(dx, dz);
@@ -1313,9 +1357,15 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
   trackingRecordingFinalized = false;
   const velocity = ball.body.linvel();
   const position = ball.body.translation();
+  // A receiver watches the server before an opening serve, so there is no
+  // artificial "follow the ball, then look back" detour. The selected
+  // receiver level controls how quickly the serve is read and reacquired.
+  const initialPhase: TrackingPhase = activePreset.mode === 'serve'
+    ? 'reacquire'
+    : skipSourceGlance ? 'follow-contact' : 'follow-launch';
   trackingSession = {
     ball,
-    phase: skipSourceGlance ? 'follow-contact' : 'follow-launch',
+    phase: initialPhase,
     phaseStartedAt: now,
     startedAt: now,
     previousVy: velocity.y,
@@ -1340,7 +1390,9 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
   const initialFailure = contactFailureReason(initialGuide, initialGuide, requiredReceiveBounceCount(), 1);
   setContactGuideState(initialFailure ? 'unreachable' : 'hittable');
   updateTrackingControlState();
-  setTrackingStatus('follow-launch');
+  setTrackingStatus(initialPhase, initialPhase === 'reacquire'
+    ? `正在读取发球动作并准备${CONTACT_TECHNIQUES[contactTechnique].label}；${currentReceiverProfile().label}反应约 ${currentReceiverProfile().reactionMs} ms。`
+    : '');
 }
 
 function launchNextTrackingBall(now: number, restoreFollowView = false): void {
@@ -1414,7 +1466,13 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   ) {
     trackedReceiveBounceX = session.ball.lastTableImpact.x * 1000;
   }
-  moveAutomaticStanceForBall(ballPoint, velocity, deltaSeconds);
+  // Footwork can start shortly after the first visual cue, before the eyes
+  // have fully reacquired the ball. This avoids treating reaction and movement
+  // as two strictly serial delays while preserving a meaningful level gap.
+  const receiver = currentReceiverProfile();
+  if (now - session.startedAt >= receiver.reactionMs * 0.35) {
+    moveAutomaticStanceForBall(ballPoint, velocity, deltaSeconds);
+  }
   const guide = contactGuidePosition();
   let trajectoryGuide = guide;
   let secondsToGuide = 0;
@@ -1464,10 +1522,7 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   } else if (session.phase === 'look-back') {
     machineLookPoint.copy(incomingSource.position());
     trackingTarget.lerp(machineLookPoint, 0.13);
-    // Short serves reach the receiver quickly. A full long-ball source glance
-    // consumes the entire between-bounces window, so table techniques use a
-    // compact glance and reacquisition while keeping the same phase sequence.
-    const sourceGlanceMs = TABLE_TECHNIQUES.has(contactTechnique) ? 140 : 520;
+    const sourceGlanceMs = receiver.reactionMs * 0.6;
     if (visualElapsedInPhase > sourceGlanceMs) {
       session.phase = 'reacquire';
       session.phaseStartedAt = now;
@@ -1475,7 +1530,9 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     }
   } else if (session.phase === 'reacquire') {
     trackingTarget.lerp(ballPoint, 0.2);
-    const reacquireMs = TABLE_TECHNIQUES.has(contactTechnique) ? 120 : 300;
+    const reacquireMs = activePreset.mode === 'serve'
+      ? receiver.reactionMs + receivePreparationMs(contactTechnique)
+      : receiver.reactionMs * 0.4;
     if (visualElapsedInPhase > reacquireMs) {
       session.phase = 'follow-contact';
       session.phaseStartedAt = now;
@@ -1597,6 +1654,14 @@ laneEl.addEventListener('change', () => {
   updateContactGuide();
 });
 levelEl.addEventListener('change', () => updateMachineDetails());
+receiverLevelEl.addEventListener('change', () => {
+  receiverLevel = receiverLevelEl.value as PlayerLevel;
+  try { localStorage.setItem(RECEIVER_LEVEL_KEY, receiverLevel); } catch { /* private mode */ }
+  updateReceiverLevelDisplay();
+  resetAutomaticStance(true);
+  updateContactGuide(trackingEnabled);
+  if (trackingEnabled) void startTrackingDemo();
+});
 randomizeEl.addEventListener('change', () => updateMachineDetails());
 ballStyleEl.addEventListener('change', () => setBallStyle(ballStyleEl.value as BallStyle));
 document.querySelectorAll<HTMLButtonElement>('[data-contact-technique]').forEach(button => {
@@ -1647,6 +1712,7 @@ trackingReplayPauseEl.addEventListener('click', () => {
   trackingReplayPauseEl.textContent = trackingReplayPaused ? '继续回放' : '暂停回放';
 });
 setBallStyle(ballStyleEl.value as BallStyle);
+updateReceiverLevelDisplay();
 
 // ==================== Topspin demonstration ====================
 const demoPowerEl = document.getElementById('demo-power') as HTMLInputElement;

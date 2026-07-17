@@ -40,6 +40,9 @@
   .quick-view-buttons button:hover { background:#303851; }
   .quick-view-buttons button.active { border-color:#54d6ff; background:rgba(84,214,255,.16); color:#d9f7ff; box-shadow:0 0 0 1px rgba(84,214,255,.2) inset; }
   .quick-view-note { margin-top:6px; color:#8fa1b7; font-size:10px; line-height:1.4; }
+  .receiver-level-control { display:grid; grid-template-columns:1fr 1.35fr; align-items:center; gap:8px; margin-top:7px; }
+  .receiver-level-control label { color:#aeb8ca; font-size:11px; }
+  .receiver-level-control select { width:100%; color:#e8e8ee; background:#252a40; border:1px solid #454d68; border-radius:5px; padding:5px; }
   .tracking-actions { display:grid; grid-template-columns:1.35fr 1fr 1fr; gap:6px; margin-top:7px; }
   .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
   .tracking-actions button.active { border-color:#ff697d; background:rgba(255,93,115,.14); color:#ff9aaa; }
@@ -245,6 +248,16 @@
         <button type="button" data-stance-mode="auto">自动移动</button>
       </div>
       <div id="stance-status" class="quick-view-note"><strong>当前身位：</strong>固定 · 中台</div>
+      <div class="receiver-level-control">
+        <label for="receiver-level">接球者反应等级</label>
+        <select id="receiver-level">
+          <option value="beginner">业余入门</option>
+          <option value="club" selected>业余俱乐部</option>
+          <option value="advanced">专业训练</option>
+          <option value="world">世界级参考</option>
+        </select>
+      </div>
+      <div id="receiver-level-status" class="quick-view-note"></div>
       <h3>固定身位</h3>
       <div class="view-buttons" id="view-stances">
         <button type="button" data-view-stance="near">近台</button>
