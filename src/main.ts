@@ -7,7 +7,9 @@ import {
   SHOT_CATEGORIES,
   SHOT_PRESETS,
   PLAYER_LEVELS,
+  RUBBER_PROFILES,
   getPreset,
+  getShotKnowledge,
   sampleTrajectory,
   solveLaunch,
   type LaunchSolution,
@@ -101,9 +103,9 @@ function syncWindowIndicators(): void {
     toggle.classList.remove('is-active', 'is-warning');
   }
   const machineToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="machine-window"]');
-  if (machineToggle && (machineRunning || trackingContinuous)) machineToggle.classList.add('is-active');
+  if (machineToggle && (machineRunning || (trackingEnabled && trackingContinuous))) machineToggle.classList.add('is-active');
   const trackingToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="tracking-window"]');
-  if (trackingToggle && (trackingSession || trackingReplayMode || trackingContinuous)) trackingToggle.classList.add('is-active');
+  if (trackingToggle && trackingEnabled) trackingToggle.classList.add('is-active');
   const demoToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="demo-window"]');
   if (demoToggle && demoActive) demoToggle.classList.add('is-active');
 }
@@ -273,6 +275,8 @@ controls.minDistance = 500; controls.maxDistance = 12000;
 controls.target.copy(CTR); controls.update();
 
 type ViewStance = 'near' | 'mid' | 'far' | 'forehand' | 'middle' | 'backhand';
+type StanceMode = 'fixed' | 'auto';
+interface StancePose { x: number; z: number; label: string; }
 const VIEW_STANCES: Record<ViewStance, { x: number; z: number; label: string }> = {
   near: { x: 3050, z: -762.5, label: '近台' },
   mid: { x: 3600, z: -762.5, label: '中台' },
@@ -283,6 +287,12 @@ const VIEW_STANCES: Record<ViewStance, { x: number; z: number; label: string }> 
 };
 let viewHeightMm = 1600;
 let viewStance: ViewStance = 'mid';
+const STANCE_MODE_KEY = 'pingpong-stance-mode-v1';
+let stanceMode: StanceMode = (() => {
+  try { return localStorage.getItem(STANCE_MODE_KEY) === 'auto' ? 'auto' : 'fixed'; }
+  catch { return 'fixed'; }
+})();
+let autoContactZ = TABLE_CENTER_Z;
 type QuickViewId = 'follow' | 'referee' | 'god' | 'audience' | 'endline' | 'side';
 const QUICK_VIEWS: Record<Exclude<QuickViewId, 'follow'>, { position: [number, number, number]; target: [number, number, number]; label: string }> = {
   referee: { position: [1450, 1750, 1050], target: [1370, TABLE_TOP_Y + 120, TABLE_CENTER_Z], label: '裁判视角' },
@@ -301,7 +311,7 @@ function setQuickViewActive(id: QuickViewId): void {
 }
 
 function applyViewPreset(): void {
-  const stance = VIEW_STANCES[viewStance];
+  const stance = effectiveStancePose();
   camera.position.set(stance.x, viewHeightMm, stance.z);
   controls.target.set(TABLE_CENTER_X, TABLE_TOP_Y + 180, TABLE_CENTER_Z);
   controls.update();
@@ -311,7 +321,9 @@ function applyViewPreset(): void {
   });
   document.querySelectorAll<HTMLButtonElement>('[data-view-stance]').forEach(button => {
     button.classList.toggle('active', button.dataset.viewStance === viewStance);
+    button.disabled = stanceMode === 'auto';
   });
+  updateStanceDisplay();
 }
 
 function applyQuickView(id: QuickViewId): void {
@@ -339,7 +351,18 @@ document.querySelectorAll<HTMLButtonElement>('[data-view-height]').forEach(butto
 });
 document.querySelectorAll<HTMLButtonElement>('[data-view-stance]').forEach(button => {
   button.addEventListener('click', () => {
+    stanceMode = 'fixed';
     viewStance = button.dataset.viewStance as ViewStance;
+    persistStanceMode();
+    applyViewPreset();
+    updateContactGuide();
+  });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-stance-mode]').forEach(button => {
+  button.addEventListener('click', () => {
+    stanceMode = button.dataset.stanceMode as StanceMode;
+    if (stanceMode === 'auto') autoContactZ = configuredContactZ();
+    persistStanceMode();
     applyViewPreset();
     updateContactGuide();
   });
@@ -544,7 +567,7 @@ function setMachineVisible(visible: boolean): void {
   machineModel.group.visible = visible;
 }
 
-type ContactTechnique = 'forehand-loop' | 'forehand-drive' | 'backhand-loop' | 'block' | 'push' | 'chop';
+type ContactTechnique = 'forehand-loop' | 'forehand-drive' | 'backhand-loop' | 'counter-loop' | 'block' | 'punch' | 'push' | 'drop-shot' | 'long-push' | 'lift' | 'forehand-flick' | 'backhand-flick' | 'chop' | 'smash' | 'lob';
 interface ContactTechniqueSpec {
   label: string;
   forwardMm: number;
@@ -557,14 +580,187 @@ interface ContactTechniqueSpec {
 const CONTACT_TECHNIQUES: Record<ContactTechnique, ContactTechniqueSpec> = {
   'forehand-loop': { label: '正手拉球', forwardMm: 500, lateralMm: -620, aboveTableMm: 300, timing: '最高点附近或下降初段', description: '右手持拍者的身体右前方，留出躯干转动和前臂加速空间。' },
   'forehand-drive': { label: '正手快攻', forwardMm: 430, lateralMm: -560, aboveTableMm: 245, timing: '上升后段至最高点', description: '比拉球更靠前、更早迎球，以较短动作借力加速。' },
-  'backhand-loop': { label: '反手拧拉', forwardMm: 390, lateralMm: -40, aboveTableMm: 220, timing: '上升后段', description: '击球点位于身体正前略偏反手侧，肘部在身前建立挥拍空间。' },
+  'backhand-loop': { label: '反手拉球', forwardMm: 390, lateralMm: -40, aboveTableMm: 245, timing: '上升后段至最高点', description: '针对出台球在身体正前略偏反手侧主动摩擦，区别于台内拧拉。' },
+  'counter-loop': { label: '反拉', forwardMm: 460, lateralMm: -420, aboveTableMm: 310, timing: '最高点附近', description: '迎着强上旋主动摩擦并向前发力，拍面关闭程度随来旋增强。' },
   block: { label: '快带/挡', forwardMm: 350, lateralMm: -80, aboveTableMm: 210, timing: '上升期', description: '靠近身体正前方，尽早借用来球速度，动作幅度最短。' },
+  punch: { label: '弹击', forwardMm: 360, lateralMm: -60, aboveTableMm: 235, timing: '上升后段', description: '以较厚碰撞和短促前臂加速处理弱旋、下沉或高于球网的来球。' },
   push: { label: '搓球', forwardMm: 520, lateralMm: -160, aboveTableMm: 105, timing: '第一次落台后、第二跳前', description: '接球方台内身前低位触球，拍面进入球下部；绝不等到第二跳出台。', tableContactX: 2300 },
+  'drop-shot': { label: '摆短', forwardMm: 570, lateralMm: -120, aboveTableMm: 90, timing: '上升初段', description: '手腕稳定、触球薄且卸力，把短球再次控制在对方台内。', tableContactX: 2240 },
+  'long-push': { label: '劈长', forwardMm: 500, lateralMm: -180, aboveTableMm: 115, timing: '上升后段', description: '借来球旋转向前下方加速，将球快速送到对方端线或追身位。', tableContactX: 2320 },
+  lift: { label: '托球', forwardMm: 500, lateralMm: -120, aboveTableMm: 145, timing: '上升后段至最高点', description: '用较开拍面向前上方托起来球，适合台内短下旋或旋转不明的控制过渡。', tableContactX: 2300 },
+  'forehand-flick': { label: '正手挑打', forwardMm: 535, lateralMm: -420, aboveTableMm: 155, timing: '上升后段至最高点', description: '上步进入台内，以前臂和手腕向前上方加速处理短球。', tableContactX: 2290 },
+  'backhand-flick': { label: '反手拧拉', forwardMm: 510, lateralMm: -30, aboveTableMm: 165, timing: '上升后段', description: '肘部前置、手腕绕球侧面摩擦，主动处理短下旋或侧下旋。', tableContactX: 2290 },
   chop: { label: '削球', forwardMm: 420, lateralMm: -600, aboveTableMm: 150, timing: '下降期', description: '身体侧前方较低位置触球，为向下、向前的长挥拍留出空间。' },
+  smash: { label: '扣杀', forwardMm: 430, lateralMm: -420, aboveTableMm: 430, timing: '最高点至下降初段', description: '针对明显高球用较厚碰撞向前下方加速，优先保证落点和连续。' },
+  lob: { label: '放高球', forwardMm: 300, lateralMm: -350, aboveTableMm: 180, timing: '下降期低点', description: '远台被动时向前上方摩擦并抬高弧线，以深落点争取回位时间。' },
 };
 let contactTechnique: ContactTechnique = 'forehand-loop';
+const TABLE_TECHNIQUES = new Set<ContactTechnique>(['push', 'drop-shot', 'long-push', 'lift', 'forehand-flick', 'backhand-flick']);
+const AUTO_STANCE_MOVE_SPEED_MM_PER_SEC = 1450;
 
-const contactGuideMaterial = new THREE.MeshBasicMaterial({ color: 0x54d6ff, wireframe: true, transparent: true, opacity: 0.95 });
+function persistStanceMode(): void {
+  try { localStorage.setItem(STANCE_MODE_KEY, stanceMode); } catch { /* private mode */ }
+}
+
+function configuredContactZ(): number {
+  const lane = laneEl.value as TargetLane;
+  if (lane === 'forehand') return -1305;
+  if (lane === 'backhand') return -220;
+  return TABLE_CENTER_Z;
+}
+
+function autoStanceDepth(technique: ContactTechnique): { x: number; label: string } {
+  const spec = CONTACT_TECHNIQUES[technique];
+  if (TABLE_TECHNIQUES.has(technique)) return { x: (spec.tableContactX ?? 2280) + spec.forwardMm, label: '台内近台' };
+  if (technique === 'block' || technique === 'punch' || technique === 'forehand-drive') return { x: 3150, label: '近台' };
+  if (technique === 'chop') return { x: 4250, label: '远台削球' };
+  if (technique === 'lob') return { x: 4500, label: '远台防守' };
+  if (technique === 'smash') return { x: 3400, label: '中近台进攻' };
+  return { x: 3600, label: '中台进攻' };
+}
+
+function effectiveStancePose(): StancePose {
+  if (stanceMode === 'fixed') return VIEW_STANCES[viewStance];
+  const spec = CONTACT_TECHNIQUES[contactTechnique];
+  const depth = autoStanceDepth(contactTechnique);
+  const z = THREE.MathUtils.clamp(autoContactZ - spec.lateralMm, TABLE_CENTER_Z - VENUE_WIDTH / 2 + 600, TABLE_CENTER_Z + VENUE_WIDTH / 2 - 600);
+  const laneLabel = autoContactZ < TABLE_CENTER_Z - 220 ? '正手位' : autoContactZ > TABLE_CENTER_Z + 220 ? '反手位' : '中路';
+  const forehandTechnique = contactTechnique.startsWith('forehand') || contactTechnique === 'counter-loop' || contactTechnique === 'smash';
+  const backhandTechnique = contactTechnique.startsWith('backhand');
+  const tacticalLabel = laneLabel === '反手位' && forehandTechnique
+    ? '反手位侧身正手'
+    : laneLabel === '正手位' && backhandTechnique
+      ? '正手位大跨步反手'
+      : laneLabel;
+  return { x: depth.x, z, label: `${tacticalLabel} · ${depth.label} · ${spec.label}` };
+}
+
+let receiveFailureTimer: number | null = null;
+
+function clearReceiveFailureFeedback(): void {
+  const flash = document.getElementById('receive-failure-flash')!;
+  if (receiveFailureTimer !== null) window.clearTimeout(receiveFailureTimer);
+  receiveFailureTimer = null;
+  flash.classList.remove('active');
+  document.getElementById('receive-failure-reason')!.textContent = '接球失败';
+}
+
+function showReceiveFailure(reason: string): void {
+  const flash = document.getElementById('receive-failure-flash')!;
+  if (receiveFailureTimer !== null) window.clearTimeout(receiveFailureTimer);
+  document.getElementById('receive-failure-reason')!.textContent = `接球失败 · ${reason}`;
+  flash.classList.remove('active');
+  void flash.offsetWidth;
+  flash.classList.add('active');
+  receiveFailureTimer = window.setTimeout(() => {
+    flash.classList.remove('active');
+    receiveFailureTimer = null;
+  }, 720);
+}
+
+function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, tableImpacts: number, remainingSeconds = 0): string | null {
+  const spec = CONTACT_TECHNIQUES[contactTechnique];
+  if (TABLE_TECHNIQUES.has(contactTechnique) && tableImpacts > 1) return '错过第二跳前的台内击球时机';
+  const lateralError = Math.abs(ballPoint.z - guide.z);
+  if (lateralError > 340) return `横向差 ${Math.round(lateralError)} mm，球已超出该手法的可触及范围`;
+  if (stanceMode === 'auto') {
+    const pose = effectiveStancePose();
+    const unfinishedMove = Math.hypot(camera.position.x - pose.x, camera.position.z - pose.z);
+    const reachableMovement = remainingSeconds * AUTO_STANCE_MOVE_SPEED_MM_PER_SEC + 280;
+    if (unfinishedMove > reachableMovement) return `移动还差 ${Math.round(unfinishedMove)} mm，未能及时到达${pose.label}`;
+  } else {
+    const forwardReach = Math.abs(camera.position.x - guide.x);
+    if (forwardReach > spec.forwardMm + 320) return `固定${VIEW_STANCES[viewStance].label}距离击球点过远`;
+  }
+  return null;
+}
+
+function updateStanceDisplay(): void {
+  document.querySelectorAll<HTMLButtonElement>('[data-stance-mode]').forEach(button => {
+    button.classList.toggle('active', button.dataset.stanceMode === stanceMode);
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-view-stance]').forEach(button => {
+    button.disabled = stanceMode === 'auto';
+  });
+  const pose = effectiveStancePose();
+  document.getElementById('stance-status')!.innerHTML =
+    `<strong>当前身位：</strong>${stanceMode === 'auto' ? `自动 · ${pose.label}` : `固定 · ${pose.label}`}`;
+}
+
+function resetAutomaticStance(moveCamera = false): void {
+  if (stanceMode !== 'auto') return;
+  autoContactZ = configuredContactZ();
+  updateStanceDisplay();
+  if (moveCamera) applyViewPreset();
+}
+
+function moveAutomaticStanceForBall(ballPoint: THREE.Vector3, velocity: { x: number; z: number }, deltaSeconds: number): void {
+  if (stanceMode !== 'auto') return;
+  const depth = autoStanceDepth(contactTechnique);
+  const guideX = TABLE_TECHNIQUES.has(contactTechnique)
+    ? CONTACT_TECHNIQUES[contactTechnique].tableContactX ?? 2280
+    : depth.x - CONTACT_TECHNIQUES[contactTechnique].forwardMm;
+  if (velocity.x > 0.05 && ballPoint.x < guideX) {
+    const seconds = (guideX - ballPoint.x) / (velocity.x * 1000);
+    if (seconds > 0 && seconds < 1.5) {
+      autoContactZ = THREE.MathUtils.clamp(ballPoint.z + velocity.z * 1000 * seconds, TABLE_CENTER_Z - 820, TABLE_CENTER_Z + 820);
+    }
+  }
+  const pose = effectiveStancePose();
+  const maximumStep = AUTO_STANCE_MOVE_SPEED_MM_PER_SEC * deltaSeconds;
+  const dx = pose.x - camera.position.x;
+  const dz = pose.z - camera.position.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance > 0.5) {
+    const scale = Math.min(1, maximumStep / distance);
+    camera.position.x += dx * scale;
+    camera.position.z += dz * scale;
+  }
+  updateStanceDisplay();
+}
+
+function availableTechniquesForPreset(preset: ShotPreset): ContactTechnique[] {
+  const knowledge = getShotKnowledge(preset);
+  const short = knowledge.length === 'short';
+  const halfLong = knowledge.length === 'half-long';
+  const heavyBackspin = preset.topRpm <= -2500;
+  const heavyTopspin = preset.topRpm >= 2500;
+  const lowSpin = Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) < 1000;
+  const rubber = knowledge.commonRubbers[0];
+  if (rubber === 'anti-spin') return ['punch', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot', 'long-push'];
+  if (rubber === 'long-pips' && lowSpin) return ['punch', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot', 'long-push'];
+  if (rubber === 'long-pips' && heavyBackspin) return ['forehand-loop', 'backhand-loop', 'lift', 'long-push', 'chop'];
+  if (rubber === 'medium-pips') return ['punch', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'block', 'lift'];
+  if (rubber === 'short-pips') return ['block', 'forehand-drive', 'counter-loop', 'forehand-loop', 'backhand-loop', 'chop'];
+  if (short && heavyBackspin) return ['drop-shot', 'push', 'long-push', 'lift', 'backhand-flick', 'forehand-flick', 'forehand-loop'];
+  if (short && heavyTopspin) return ['drop-shot', 'block', 'punch', 'backhand-flick', 'forehand-flick', 'long-push'];
+  if (short) return ['drop-shot', 'long-push', 'push', 'lift', 'backhand-flick', 'forehand-flick', 'punch'];
+  if (halfLong && heavyBackspin) return ['forehand-loop', 'backhand-loop', 'backhand-flick', 'forehand-flick', 'long-push', 'lift', 'chop'];
+  if (heavyBackspin) return ['forehand-loop', 'backhand-loop', 'lift', 'long-push', 'chop'];
+  if (heavyTopspin) return ['block', 'counter-loop', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'chop', 'lob'];
+  if (preset.id === 'lob') return ['smash', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot'];
+  if (preset.id === 'smash') return ['block', 'chop', 'lob'];
+  return ['forehand-drive', 'punch', 'forehand-loop', 'backhand-loop', 'block', 'counter-loop', 'chop'];
+}
+
+function updateTechniqueOptions(): void {
+  const available = availableTechniquesForPreset(activePreset);
+  if (!available.includes(contactTechnique)) contactTechnique = available[0];
+  document.querySelectorAll<HTMLButtonElement>('[data-contact-technique]').forEach(button => {
+    const technique = button.dataset.contactTechnique as ContactTechnique;
+    button.hidden = !available.includes(technique);
+    button.classList.toggle('active', technique === contactTechnique);
+    button.title = button.hidden ? '' : `${CONTACT_TECHNIQUES[technique].label}：${CONTACT_TECHNIQUES[technique].timing}`;
+  });
+  const status = document.getElementById('tracking-status');
+  if (status) {
+    const labels = available.map(id => CONTACT_TECHNIQUES[id].label).join('、');
+    status.dataset.availableTechniques = labels;
+  }
+}
+
+type ContactGuideState = 'hittable' | 'unreachable';
+const contactGuideMaterial = new THREE.MeshBasicMaterial({ color: 0x35e87b, wireframe: true, transparent: true, opacity: 0.95 });
 const contactGuideMarker = new THREE.Mesh(new THREE.SphereGeometry(28, 16, 12), contactGuideMaterial);
 const actualContactMarker = new THREE.Mesh(
   new THREE.SphereGeometry(34, 18, 14),
@@ -583,16 +779,23 @@ trackingTrailLine.visible = false;
 scene.add(contactGuideMarker, actualContactMarker, contactLink, trackingTrailLine);
 let trackingTrailPoints: THREE.Vector3[] = [];
 
+function setContactGuideState(state: ContactGuideState): void {
+  contactGuideMaterial.color.setHex(state === 'hittable' ? 0x35e87b : 0xff304f);
+  contactGuideMarker.userData.receiveState = state;
+  const stanceStatus = document.getElementById('stance-status');
+  if (stanceStatus) stanceStatus.dataset.guideState = state;
+}
+
 function contactGuidePosition(): THREE.Vector3 {
-  const stance = VIEW_STANCES[viewStance];
+  const stance = effectiveStancePose();
   const spec = CONTACT_TECHNIQUES[contactTechnique];
   const heightAdjustment = (viewHeightMm - 1600) * 0.22;
   // Once the player has already moved to the wide forehand/backhand lane,
   // the contact point shifts back toward the table centre; otherwise applying
   // the full body-relative offset would place the racket outside the table.
-  const lateralMm = viewStance === 'forehand' && contactTechnique.startsWith('forehand')
+  const lateralMm = stanceMode === 'fixed' && viewStance === 'forehand' && contactTechnique.startsWith('forehand')
     ? 80
-    : viewStance === 'backhand' && contactTechnique === 'backhand-loop'
+    : stanceMode === 'fixed' && viewStance === 'backhand' && contactTechnique === 'backhand-loop'
       ? -80
       : spec.lateralMm;
   return new THREE.Vector3(
@@ -603,12 +806,13 @@ function contactGuidePosition(): THREE.Vector3 {
 }
 
 function placeContactGuide(point: THREE.Vector3, show: boolean): void {
+  const stance = effectiveStancePose();
   contactGuideMarker.position.copy(point);
   contactGuideMarker.visible = show;
   contactLink.visible = show;
   contactLink.geometry.dispose();
   contactLink.geometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(VIEW_STANCES[viewStance].x, Math.max(900, viewHeightMm * 0.72), VIEW_STANCES[viewStance].z),
+    new THREE.Vector3(stance.x, Math.max(900, viewHeightMm * 0.72), stance.z),
     point,
   ]);
   contactLink.computeLineDistances();
@@ -618,8 +822,12 @@ function updateContactGuide(show = contactGuideMarker.visible): void {
   const spec = CONTACT_TECHNIQUES[contactTechnique];
   const point = contactGuidePosition();
   placeContactGuide(point, show);
+  const available = availableTechniquesForPreset(activePreset)
+    .map(id => CONTACT_TECHNIQUES[id].label).join('、');
   document.getElementById('tracking-status')!.innerHTML =
-    `<strong>${spec.label}</strong>：${spec.description}<br>击球时机：${spec.timing}`;
+    `<strong>${spec.label}</strong>：${spec.description}<br>击球时机：${spec.timing}<br>` +
+    `<span style="color:#8fa1b7">当前球路可处理：${available}<br>网状标识球：绿色可处理，红色不可处理</span>`;
+  updateStanceDisplay();
 }
 
 applyViewPreset();
@@ -650,6 +858,7 @@ function signedSpin(value: number, positive: string, negative: string): string {
 
 function updateMachineDetails(solution?: LaunchSolution): void {
   const settings = readMachineSettings();
+  const knowledge = getShotKnowledge(activePreset);
   const level = PLAYER_LEVELS[settings.playerLevel] ?? PLAYER_LEVELS.advanced;
   const nominalSpeed = activePreset.speedMps * settings.strength * level.speedScale;
   const shownSpeed = solution?.speedMps ?? nominalSpeed;
@@ -665,29 +874,45 @@ function updateMachineDetails(solution?: LaunchSolution): void {
   const serveRoute = activePreset.mode === 'serve'
     ? `<br>双跳路线 <span style="color:#54d6ff">● ${activePreset.firstBounceMm ?? 720}mm</span> → <span style="color:#ffd166">● ${activePreset.targetDepthMm}mm</span>`
     : '';
+  const lengthLabel = knowledge.length === 'short' ? '短球/预计台内二跳' : knowledge.length === 'half-long' ? '半出台球' : '长球/出台球';
+  const rubberLabels = knowledge.commonRubbers.map(key => RUBBER_PROFILES[key].label).join('、');
   machineDetailEl.innerHTML =
     `<strong>${activePreset.name}</strong> · ${activePreset.description}<br>` +
+    `${knowledge.family} · ${lengthLabel}<br><span style="color:#8fa1b7">常见来源：${rubberLabels}</span><br>` +
     `${level.label} · 速度 ${shownSpeed.toFixed(1)}m/s (${Math.round(shownSpeed * 3.6)}km/h)${clearance}${serveRoute}` +
     `<div class="spin-grid">` +
     `<span class="spin-chip">上下旋<b>${signedSpin(activePreset.topRpm * spinFactor, '上旋', '下旋')} rpm</b></span>` +
     `<span class="spin-chip">侧旋<b>${signedSpin(activePreset.sideRpm * spinFactor, '左侧', '右侧')} rpm</b></span>` +
     `<span class="spin-chip">轴向旋转<b>${Math.round(Math.abs(activePreset.corkRpm * spinFactor))} rpm</b></span>` +
     `<span class="spin-chip">合成旋转<b data-testid="composite-spin">${Math.round(solution?.spinRpm ?? nominalSpin)} rpm</b></span>` +
-    `</div><button id="parameter-info" class="info-button" type="button">ⓘ 参数与物理说明</button>`;
+    `</div><button id="parameter-info" class="info-button" type="button">详尽预览与处理方式</button>`;
   document.getElementById('parameter-info')?.addEventListener('click', showParameterDialog);
 }
 
 const parameterDialog = document.getElementById('parameter-dialog') as HTMLDialogElement;
 function showParameterDialog(): void {
   const settings = readMachineSettings();
+  const knowledge = getShotKnowledge(activePreset);
   const level = PLAYER_LEVELS[settings.playerLevel];
   const rpm = Math.round(Math.hypot(activePreset.topRpm, activePreset.sideRpm, activePreset.corkRpm) * level.spinScale);
+  const rubberDetails = knowledge.commonRubbers.map(key => {
+    const rubber = RUBBER_PROFILES[key];
+    return `<li><b>${rubber.label}</b>：${rubber.structure}${rubber.behavior} 常见用途：${rubber.typicalUse}</li>`;
+  }).join('');
+  const handling = availableTechniquesForPreset(activePreset)
+    .map(id => `<li><b>${CONTACT_TECHNIQUES[id].label}</b>：${CONTACT_TECHNIQUES[id].description} 时机：${CONTACT_TECHNIQUES[id].timing}。</li>`)
+    .join('');
   document.getElementById('dialog-title')!.textContent = `${activePreset.name} · 参数说明`;
   document.getElementById('dialog-content')!.innerHTML = `
     <p><b>${level.label}</b>：${level.reference}</p>
-    <h3>当前球路</h3><ul><li>平动速度：约 ${(activePreset.speedMps * level.speedScale).toFixed(1)} m/s</li><li>合成旋转：约 ${rpm} rpm；它是三个旋转轴分量的向量长度，不会把方向信息丢掉。</li><li>${activePreset.mode === 'serve' ? '开局发球：先在发球方台面落一次，再越网落到接球方。' : '多球训练：球从发球机直接越网，在接球方落台。'}</li></ul>
-    <h3>参考如何理解</h3><p>档位是训练强度参考，不是给选手贴等级标签。<a href="https://journals.sagepub.com/doi/10.1177/22150218251409592" target="_blank" rel="noreferrer">世界级比赛研究</a>中，短/长发球中位转速约为 46.4/50.9 rps（约 2780/3050 rpm）；拉球研究观察到强攻球可超过 110 rps（6600 rpm）。另参考<a href="https://doi.org/10.3390/app15116350" target="_blank" rel="noreferrer">精英青年球员的球速/旋转光学测量</a>。球种、男女、器材和测量方法都会改变结果。</p>
-    <h3>为什么会拐与前冲</h3><p>伯努利压差可帮助直观理解两侧流速差；对旋转球的整体气动力通常称为马格努斯效应。上旋产生向下力，侧旋产生横向力。落台时接触摩擦把切向旋转转换为线速度，所以会前冲、停顿或侧拐。</p>`;
+    <h3>球路身份</h3><ul><li>${knowledge.family}</li><li>平动速度：约 ${(activePreset.speedMps * level.speedScale).toFixed(1)} m/s；合成旋转：约 ${rpm} rpm。</li><li>${activePreset.mode === 'serve' ? '合法发球路线：先落发球方台面，再越网落到接球方。' : '多球/回合球：由发球机直接模拟对手击球后的入射球。'}</li></ul>
+    <h3>常见胶皮来源</h3><ul>${rubberDetails}</ul>
+    <h3>怎样产生</h3><p>${knowledge.production}</p>
+    <h3>飞行与落台</h3><p>${knowledge.flight} ${knowledge.bounce}</p>
+    <h3>识别线索</h3><p>${knowledge.readingCues}</p>
+    <h3>战术目的</h3><p>${knowledge.tacticalIntent}</p>
+    <h3>处理总原则</h3><p>${knowledge.handlingFocus}</p><ul>${handling}</ul>
+    <h3>资料与边界</h3><p>胶皮结构按 ITTF 器材规则归类；具体球速、旋转和反弹仍受海绵厚度/硬度、底板、动作、来球和环境影响。参考 <a href="https://documents.ittf.sport/sites/default/files/public/2025-02/2025_ITTF_Statutes_clean_version.pdf" target="_blank" rel="noreferrer">ITTF 2025 器材规则</a>、<a href="https://journals.sagepub.com/doi/10.1177/17543371241310338" target="_blank" rel="noreferrer">不同胶皮实验比较</a>与<a href="https://arxiv.org/abs/2604.11349" target="_blank" rel="noreferrer">多胶皮球拍碰撞建模</a>。</p>`;
   parameterDialog.showModal();
 }
 document.getElementById('dialog-close')!.addEventListener('click', () => parameterDialog.close());
@@ -699,6 +924,9 @@ function setActivePreset(preset: ShotPreset, updateCadence = true): void {
     button.classList.toggle('active', button.dataset.preset === preset.id);
   });
   updateMachineDetails();
+  updateTechniqueOptions();
+  resetAutomaticStance(true);
+  updateContactGuide(false);
 }
 
 function renderPresetButtons(): void {
@@ -711,6 +939,7 @@ function renderPresetButtons(): void {
     const buttons = document.createElement('div');
     buttons.className = 'preset-buttons';
     for (const preset of SHOT_PRESETS.filter(item => item.category === category)) {
+      const knowledge = getShotKnowledge(preset);
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'preset-button';
@@ -718,7 +947,8 @@ function renderPresetButtons(): void {
       button.style.setProperty('--preset-color', `#${preset.color.toString(16).padStart(6, '0')}`);
       const spin = Math.round(Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm));
       button.title = `${preset.description} ${preset.speedMps}m/s · ${spin}rpm`;
-      button.dataset.tip = `${preset.description}｜基准 ${preset.speedMps}m/s｜合成 ${spin}rpm${preset.mode === 'serve' ? '｜合法双落台发球' : ''}`;
+      const rubberLabels = knowledge.commonRubbers.map(key => RUBBER_PROFILES[key].label).join('/');
+      button.dataset.tip = `${knowledge.family}｜${preset.description}｜${rubberLabels}｜基准 ${preset.speedMps}m/s｜合成 ${spin}rpm${preset.mode === 'serve' ? '｜合法双落台发球' : ''}`;
       button.innerHTML = preset.shortcut
         ? `<kbd>${preset.shortcut}</kbd>${preset.name}`
         : preset.name;
@@ -782,9 +1012,12 @@ interface TrackingSession {
   actualPoint: THREE.Vector3;
   closestPoint: THREE.Vector3;
   closestDistance: number;
+  contactFailed: boolean;
 }
 let trackingSession: TrackingSession | null = null;
+let trackingEnabled = false;
 let trackingContinuous = false;
+let trackingAutoReplay = false;
 let trackingNextShotAt = 0;
 const trackingQueue: RapierBall[] = [];
 const trackingTarget = new THREE.Vector3();
@@ -803,8 +1036,9 @@ const incomingSource: {
   note: '后续可接入对手出拍位置',
   position: () => new THREE.Vector3(25, machineModel.head.position.y, -762.5),
 };
-const trackingContinuousEl = document.getElementById('tracking-continuous') as HTMLButtonElement;
-const trackingReplayEl = document.getElementById('tracking-replay') as HTMLButtonElement;
+const trackingStartEl = document.getElementById('tracking-start') as HTMLButtonElement;
+const trackingContinuousEl = document.getElementById('tracking-continuous') as HTMLInputElement;
+const trackingReplayEl = document.getElementById('tracking-replay') as HTMLInputElement;
 const trackingReplayPauseEl = document.getElementById('tracking-replay-pause') as HTMLButtonElement;
 const trackingSpeedEl = document.getElementById('tracking-speed') as HTMLInputElement;
 const trackingSpeedValueEl = document.getElementById('tracking-speed-value')!;
@@ -826,7 +1060,7 @@ function turnViewAtHumanSpeed(desiredTarget: THREE.Vector3, deltaSeconds: number
   const cameraDistance = Math.max(1, controls.target.distanceTo(camera.position));
   const currentDirection = controls.target.clone().sub(camera.position).normalize();
   const desiredDirection = desiredTarget.clone().sub(camera.position).normalize();
-  const maxAngle = THREE.MathUtils.degToRad(SOURCE_TURN_SPEED_DEG_PER_SEC * trackingSpeed) * deltaSeconds;
+  const maxAngle = THREE.MathUtils.degToRad(SOURCE_TURN_SPEED_DEG_PER_SEC) * deltaSeconds;
   const angle = currentDirection.angleTo(desiredDirection);
   if (angle > maxAngle && angle > 1e-5) {
     const axis = currentDirection.clone().cross(desiredDirection).normalize();
@@ -839,7 +1073,6 @@ function turnViewAtHumanSpeed(desiredTarget: THREE.Vector3, deltaSeconds: number
 
 function finalizeTrackingRecording(): void {
   if (trackingRecording.length < 2) return;
-  trackingReplayEl.disabled = false;
   trackingReplayPauseEl.disabled = true;
 }
 
@@ -850,18 +1083,15 @@ function stopTrackingReplay(): void {
   trackingReplayPaused = false;
   trackingReplayTime = 0;
   trackingReplayMesh.visible = false;
-  trackingReplayEl.disabled = trackingRecording.length < 2;
   trackingReplayPauseEl.disabled = true;
   trackingReplayPauseEl.textContent = '暂停回放';
   syncWindowIndicators();
 }
 
-function startTrackingReplay(): void {
+function startTrackingReplay(sourceBall: RapierBall): void {
   if (trackingRecording.length < 2) return;
   trackingSession = null;
-  trackingContinuous = false;
-  trackingQueue.length = 0;
-  trackingReplaySourceBall = getBalls().find(ball => ball.mesh.visible) ?? getBalls()[0] ?? null;
+  trackingReplaySourceBall = sourceBall;
   if (trackingReplaySourceBall) trackingReplaySourceBall.mesh.visible = false;
   trackingReplayMode = true;
   trackingReplayPaused = false;
@@ -881,11 +1111,8 @@ function updateTrackingReplay(deltaSeconds: number): void {
   if (!trackingReplayMode || trackingReplayPaused) return;
   trackingReplayTime += deltaSeconds * trackingSpeed;
   const last = trackingRecording[trackingRecording.length - 1];
-  if (trackingReplayTime >= last.time) {
-    trackingReplayTime = last.time;
-    trackingReplayPaused = true;
-    trackingReplayPauseEl.textContent = '继续回放';
-  }
+  const ended = trackingReplayTime >= last.time;
+  if (ended) trackingReplayTime = last.time;
   let right = 1;
   while (right < trackingRecording.length && trackingRecording[right].time < trackingReplayTime) right += 1;
   const left = Math.max(0, right - 1);
@@ -893,6 +1120,15 @@ function updateTrackingReplay(deltaSeconds: number): void {
   const b = trackingRecording[Math.min(right, trackingRecording.length - 1)];
   const span = Math.max(1e-6, b.time - a.time);
   trackingReplayMesh.position.lerpVectors(a.position, b.position, THREE.MathUtils.clamp((trackingReplayTime - a.time) / span, 0, 1));
+  if (ended) {
+    stopTrackingReplay();
+    if (trackingEnabled && trackingContinuous) {
+      launchNextTrackingBall(performance.now(), true);
+    } else if (trackingEnabled) {
+      document.getElementById('tracking-status')!.innerHTML =
+        `<strong>单球流程完成</strong><br>正常跟球与慢放回看均已结束；关闭再开启可开始下一球。`;
+    }
+  }
 }
 
 function trackingPhaseLabel(phase: TrackingPhase): string {
@@ -910,12 +1146,23 @@ function setTrackingStatus(phase: TrackingPhase, detail = ''): void {
     `<strong>${trackingPhaseLabel(phase)}</strong> · ${spec.label}<br>` +
     `来球源：${incomingSource.label}；${incomingSource.note}` +
     `${detail ? `<br>${detail}` : `<br>${spec.description}`}`;
+  updateStanceDisplay();
+}
+
+function updateTrackingControlState(): void {
+  trackingStartEl.textContent = trackingEnabled ? '停止跟球' : '开启跟球';
+  trackingStartEl.classList.toggle('active', trackingEnabled);
+  trackingContinuous = trackingContinuousEl.checked;
+  trackingAutoReplay = trackingReplayEl.checked;
+  syncWindowIndicators();
 }
 
 function stopTrackingDemo(resetStatus = true): void {
   stopTrackingReplay();
+  clearReceiveFailureFeedback();
+  setContactGuideState('hittable');
+  trackingEnabled = false;
   trackingSession = null;
-  trackingContinuous = false;
   trackingQueue.length = 0;
   controls.enabled = true;
   contactGuideMarker.visible = false;
@@ -925,13 +1172,15 @@ function stopTrackingDemo(resetStatus = true): void {
   trackingTrailLine.geometry.dispose();
   trackingTrailLine.geometry = new THREE.BufferGeometry();
   trackingTrailPoints = [];
-  document.getElementById('tracking-start')?.classList.remove('active');
-  trackingContinuousEl.classList.remove('active');
   if (resetStatus) updateContactGuide(false);
-  syncWindowIndicators();
+  updateTrackingControlState();
 }
 
 function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, skipSourceGlance = false): void {
+  clearReceiveFailureFeedback();
+  trackingRecording = [];
+  trackingRecordingStartedAt = now;
+  trackingRecordingFinalized = false;
   const velocity = ball.body.linvel();
   const position = ball.body.translation();
   trackingSession = {
@@ -944,45 +1193,56 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
     actualPoint: new THREE.Vector3(),
     closestPoint: new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000),
     closestDistance: Number.POSITIVE_INFINITY,
+    contactFailed: false,
   };
   controls.enabled = false;
   trackingTrailPoints = [];
   trackingTrailLine.visible = true;
+  contactGuideMarker.visible = true;
+  actualContactMarker.visible = false;
+  (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0xffd166);
   trackingTarget.set(position.x * 1000, position.y * 1000, position.z * 1000);
   // Only the first ball establishes the initial eye target. During continuous
   // tracking, keep the previous contact target and let the normal camera
   // interpolation acquire the next ball without a sudden viewpoint jump.
   if (snapCamera) controls.target.copy(trackingTarget);
-  document.getElementById('tracking-start')!.classList.add('active');
+  const initialGuide = contactGuidePosition();
+  const initialFailure = contactFailureReason(initialGuide, initialGuide, 1, 1);
+  setContactGuideState(initialFailure ? 'unreachable' : 'hittable');
+  updateTrackingControlState();
   setTrackingStatus('follow-launch');
 }
 
-async function startTrackingDemo(continuous = false): Promise<void> {
-  if (!isReady()) return;
-  await clearBalls();
-  setMachineRunning(false);
-  trackingContinuous = continuous;
-  trackingQueue.length = 0;
-  trackingRecording = [];
-  trackingRecordingStartedAt = performance.now();
-  trackingRecordingFinalized = false;
-  trackingReplayEl.disabled = true;
-  applyViewPreset();
+function launchNextTrackingBall(now: number, restoreFollowView = false): void {
+  if (!trackingEnabled) return;
+  resetAutomaticStance();
+  if (restoreFollowView) applyViewPreset();
   updateContactGuide(true);
-  actualContactMarker.visible = false;
-  // A tracking demo follows exactly what the machine is configured to throw:
-  // no hidden preset, lane, or randomization override. If the selected stance
-  // cannot handle that ball, the demo must expose the miss instead of adapting
-  // the incoming ball to make the technique look successful.
   const ball = feedMachine(activePreset, true);
   if (!ball) {
     stopTrackingDemo();
     return;
   }
-  beginTrackingBall(ball, performance.now(), true);
-  trackingContinuousEl.classList.toggle('active', continuous);
-  trackingNextShotAt = performance.now() + 1000 / readMachineSettings().cadence;
-  syncWindowIndicators();
+  beginTrackingBall(ball, now, restoreFollowView, !restoreFollowView);
+  trackingNextShotAt = now + 1000 / readMachineSettings().cadence;
+}
+
+async function startTrackingDemo(): Promise<void> {
+  if (!isReady()) return;
+  await clearBalls();
+  setMachineRunning(false);
+  trackingEnabled = true;
+  trackingContinuous = trackingContinuousEl.checked;
+  trackingAutoReplay = trackingReplayEl.checked;
+  trackingQueue.length = 0;
+  resetAutomaticStance();
+  applyViewPreset();
+  // A tracking demo follows exactly what the machine is configured to throw:
+  // no hidden preset, lane, or randomization override. If the selected stance
+  // cannot handle that ball, the demo must expose the miss instead of adapting
+  // the incoming ball to make the technique look successful.
+  launchNextTrackingBall(performance.now(), true);
+  updateTrackingControlState();
 }
 
 function updateTrackingDemo(now: number, deltaSeconds: number): void {
@@ -1006,9 +1266,12 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     trackingTrailLine.geometry = new THREE.BufferGeometry().setFromPoints(trackingTrailPoints);
   }
   const elapsedInPhase = now - session.phaseStartedAt;
-  const visualElapsedInPhase = elapsedInPhase * trackingSpeed;
+  const visualElapsedInPhase = elapsedInPhase;
+  moveAutomaticStanceForBall(ballPoint, velocity, deltaSeconds);
   const guide = contactGuidePosition();
   let trajectoryGuide = guide;
+  let secondsToGuide = 0;
+  let hasTrajectoryProjection = false;
   // Once the ball has bounced, project the elite body-relative contact plane
   // onto the current physical flight path. The cyan marker therefore sits on
   // the actual arc instead of floating at an unrelated fixed height.
@@ -1021,8 +1284,19 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     );
     if (timeToPlane > 0 && timeToPlane < 1.5 && projected.y > TABLE_TOP_Y + BALL_RADIUS && projected.y < 2400) {
       trajectoryGuide = projected;
+      secondsToGuide = timeToPlane;
+      hasTrajectoryProjection = true;
       if (contactGuideMarker.visible) placeContactGuide(projected, true);
     }
+  }
+  if (hasTrajectoryProjection && session.phase !== 'contact-hold' && session.phase !== 'post-contact-source') {
+    const predictedFailure = contactFailureReason(
+      trajectoryGuide,
+      guide,
+      Math.max(1, session.ball.tableImpacts),
+      secondsToGuide,
+    );
+    setContactGuideState(predictedFailure ? 'unreachable' : 'hittable');
   }
   const distanceToGuide = ballPoint.distanceTo(trajectoryGuide);
   if (session.ball.tableImpacts > 0 && distanceToGuide < session.closestDistance) {
@@ -1057,7 +1331,7 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     }
   } else if (session.phase === 'follow-contact') {
     trackingTarget.copy(ballPoint);
-    const hasRequiredBounce = contactTechnique !== 'push' || session.ball.tableImpacts >= 1;
+    const hasRequiredBounce = !TABLE_TECHNIQUES.has(contactTechnique) || session.ball.tableImpacts >= 1;
     if (position.x * 1000 >= guide.x && hasRequiredBounce) {
       session.phase = 'contact-hold';
       session.phaseStartedAt = now;
@@ -1066,30 +1340,53 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
       actualContactMarker.visible = true;
       const offset = ballPoint.distanceTo(trajectoryGuide);
       const delta = ballPoint.clone().sub(guide);
-      const bounceNote = contactTechnique === 'push' ? `第 ${session.ball.tableImpacts} 次落台后、第二跳前。` : '';
-      setTrackingStatus('contact-hold', `${bounceNote}黄色标记为实际球到达击球平面的瞬间；与精英基准点相差 ${Math.round(offset)} mm（高度 ${Math.round(delta.y)} / 横向 ${Math.round(delta.z)} mm）。`);
+      const bounceNote = TABLE_TECHNIQUES.has(contactTechnique) ? `第 ${session.ball.tableImpacts} 次落台后、第二跳前。` : '';
+      const failureReason = contactFailureReason(ballPoint, guide, session.ball.tableImpacts);
+      if (failureReason) {
+        session.contactFailed = true;
+        setContactGuideState('unreachable');
+        (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0xff304f);
+        showReceiveFailure(failureReason);
+        setTrackingStatus('contact-hold', `接球失败：${failureReason}。红色标记为错过击球窗口时的球位置。`);
+      } else {
+        setContactGuideState('hittable');
+        setTrackingStatus('contact-hold', `${bounceNote}黄色标记为实际球到达击球平面的瞬间；与精英基准点相差 ${Math.round(offset)} mm（高度 ${Math.round(delta.y)} / 横向 ${Math.round(delta.z)} mm）。`);
+      }
     } else if (session.ball.tableImpacts > 0 && (position.y < 0.08 || velocity.x <= 0)) {
       session.phase = 'contact-hold';
       session.phaseStartedAt = now;
+      session.contactFailed = true;
+      setContactGuideState('unreachable');
       session.actualPoint.copy(session.closestPoint);
       actualContactMarker.position.copy(session.closestPoint);
       actualContactMarker.visible = true;
-      setTrackingStatus('contact-hold', `当前站位无法进入该球的标准击球窗口；黄色标记为最接近点，建议切换更靠近球台的站位。`);
+      (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0xff304f);
+      const reason = '当前身位无法进入该球的标准击球窗口';
+      showReceiveFailure(reason);
+      setTrackingStatus('contact-hold', `接球失败：${reason}；红色标记为最接近点。`);
     }
   } else if (session.phase === 'contact-hold') {
     trackingTarget.copy(session.actualPoint);
     if (elapsedInPhase > 140) {
       session.phase = 'post-contact-source';
       session.phaseStartedAt = now;
-      setTrackingStatus('post-contact-source', `击球完成，先回看${incomingSource.label}，再捕捉下一球。`);
+      setTrackingStatus('post-contact-source', session.contactFailed
+        ? `本球处理失败，视线仍按真实反应回看${incomingSource.label}，再准备下一球。`
+        : `击球完成，先回看${incomingSource.label}，再捕捉下一球。`);
     }
   }
 
   if (session.phase === 'post-contact-source') {
     trackingTarget.copy(incomingSource.position());
-    if (trackingContinuous && elapsedInPhase > 420 && trackingQueue.length > 0) {
-      beginTrackingBall(trackingQueue.shift()!, now, false, true);
-      return;
+    if (elapsedInPhase > 420) {
+      if (trackingAutoReplay && trackingRecordingFinalized) {
+        startTrackingReplay(session.ball);
+        return;
+      }
+      if (trackingContinuous && trackingQueue.length > 0) {
+        beginTrackingBall(trackingQueue.shift()!, now, false, true);
+        return;
+      }
     }
   }
 
@@ -1102,12 +1399,12 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   if (session.phase === 'post-contact-source') {
     turnViewAtHumanSpeed(trackingTarget, deltaSeconds);
   } else {
-    controls.target.lerp(trackingTarget, session.phase === 'contact-hold' ? 0.16 + trackingSpeed * 0.06 : 0.12 + trackingSpeed * 0.18);
+    controls.target.lerp(trackingTarget, session.phase === 'contact-hold' ? 0.22 : 0.30);
   }
 }
 
 function feedContinuousTrackingBall(now: number): void {
-  if (!trackingContinuous || now < trackingNextShotAt) return;
+  if (!trackingEnabled || !trackingContinuous || trackingAutoReplay || trackingReplayMode || now < trackingNextShotAt) return;
   const ball = feedMachine(activePreset, true);
   if (ball) trackingQueue.push(ball);
   trackingNextShotAt = now + 1000 / readMachineSettings().cadence;
@@ -1141,40 +1438,61 @@ machineOnceEl.addEventListener('click', () => feedMachine());
 machineToggleEl.addEventListener('click', () => setMachineRunning(!machineRunning));
 strengthEl.addEventListener('input', () => updateMachineDetails());
 cadenceEl.addEventListener('input', () => updateMachineDetails());
-laneEl.addEventListener('change', () => updateMachineDetails());
+laneEl.addEventListener('change', () => {
+  updateMachineDetails();
+  resetAutomaticStance(true);
+  updateContactGuide();
+});
 levelEl.addEventListener('change', () => updateMachineDetails());
 randomizeEl.addEventListener('change', () => updateMachineDetails());
 ballStyleEl.addEventListener('change', () => setBallStyle(ballStyleEl.value as BallStyle));
 document.querySelectorAll<HTMLButtonElement>('[data-contact-technique]').forEach(button => {
   button.addEventListener('click', () => {
-    const wasTracking = Boolean(trackingSession);
+    const wasTracking = trackingEnabled;
     contactTechnique = button.dataset.contactTechnique as ContactTechnique;
     document.querySelectorAll<HTMLButtonElement>('[data-contact-technique]').forEach(item => {
       item.classList.toggle('active', item === button);
     });
+    resetAutomaticStance(true);
     updateContactGuide(wasTracking);
     if (wasTracking) void startTrackingDemo();
   });
 });
-document.getElementById('tracking-start')!.addEventListener('click', () => void startTrackingDemo());
-trackingContinuousEl.addEventListener('click', () => {
-  if (trackingContinuous) {
+trackingStartEl.addEventListener('click', () => {
+  if (trackingEnabled) {
     stopTrackingDemo();
   } else {
-    void startTrackingDemo(true);
+    void startTrackingDemo();
   }
+});
+trackingContinuousEl.addEventListener('change', () => {
+  trackingContinuous = trackingContinuousEl.checked;
+  if (!trackingContinuous) {
+    trackingQueue.length = 0;
+  } else if (trackingEnabled && !trackingAutoReplay && !trackingReplayMode) {
+    trackingNextShotAt = performance.now() + 1000 / readMachineSettings().cadence;
+  }
+  updateTrackingControlState();
+});
+trackingReplayEl.addEventListener('change', () => {
+  trackingAutoReplay = trackingReplayEl.checked;
+  if (trackingAutoReplay) {
+    trackingQueue.length = 0;
+  } else if (trackingReplayMode) {
+    stopTrackingReplay();
+    if (trackingEnabled && trackingContinuous) launchNextTrackingBall(performance.now(), true);
+  }
+  updateTrackingControlState();
 });
 trackingSpeedEl.addEventListener('input', () => {
   trackingSpeed = Number(trackingSpeedEl.value);
   trackingSpeedValueEl.textContent = `${trackingSpeed.toFixed(2)}×`;
 });
-trackingReplayEl.addEventListener('click', startTrackingReplay);
 trackingReplayPauseEl.addEventListener('click', () => {
   if (!trackingReplayMode) return;
   trackingReplayPaused = !trackingReplayPaused;
   trackingReplayPauseEl.textContent = trackingReplayPaused ? '继续回放' : '暂停回放';
 });
-document.getElementById('tracking-stop')!.addEventListener('click', () => stopTrackingDemo());
 setBallStyle(ballStyleEl.value as BallStyle);
 
 // ==================== Topspin demonstration ====================
@@ -1183,6 +1501,7 @@ const demoSpinEl = document.getElementById('demo-spin') as HTMLInputElement;
 const demoSideEl = document.getElementById('demo-side') as HTMLInputElement;
 const demoLines: THREE.Line[] = [];
 let demoActive = false;
+updateTrackingControlState();
 
 function clearDemoLines(): void {
   for (const line of demoLines) { scene.remove(line); line.geometry.dispose(); }

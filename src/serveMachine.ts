@@ -1,4 +1,4 @@
-export type ShotCategory = '开局发球' | '基础球' | '上旋进攻' | '下旋控制' | '侧旋组合' | '极限球';
+export type ShotCategory = '开局发球' | '基础球' | '上旋进攻' | '下旋控制' | '侧旋组合' | '异质胶皮' | '极限球';
 export type TargetLane = 'random' | 'forehand' | 'middle' | 'backhand';
 export type PlayerLevel = 'beginner' | 'club' | 'advanced' | 'world';
 export type BallStyle = 'white' | 'yellow' | 'white-yellow-split' | 'white-yellow-eight' | 'rainbow';
@@ -31,6 +31,35 @@ export interface ShotPreset {
   firstBounceMm?: number;
 }
 
+export type RubberKey = 'inverted-grippy' | 'inverted-tacky' | 'short-pips' | 'medium-pips' | 'long-pips' | 'anti-spin';
+export type BallLength = 'short' | 'half-long' | 'long';
+export interface RubberProfile {
+  label: string;
+  structure: string;
+  behavior: string;
+  typicalUse: string;
+}
+export interface ShotKnowledge {
+  family: string;
+  length: BallLength;
+  commonRubbers: RubberKey[];
+  production: string;
+  flight: string;
+  bounce: string;
+  readingCues: string;
+  tacticalIntent: string;
+  handlingFocus: string;
+}
+
+export const RUBBER_PROFILES: Record<RubberKey, RubberProfile> = {
+  'inverted-grippy': { label: '高摩擦反胶', structure: '颗粒向内、外表面平滑，通常配海绵。', behavior: '主动摩擦和包裹能力强，容易制造上旋、下旋与侧旋，也最吃来球旋转。', typicalUse: '弧圈、快攻、搓摆、拧拉和大多数高质量发球。' },
+  'inverted-tacky': { label: '黏性反胶', structure: '反胶结构，表层黏性较强，常配较硬海绵。', behavior: '低速薄摩擦时仍能咬住球，便于制造强下旋、强侧下旋和高弧线加转。', typicalUse: '发抢、台内控制、强下旋和加转弧圈。' },
+  'short-pips': { label: '正胶/短颗粒', structure: '短颗粒向外，可配海绵。', behavior: '出球直接、弧线较平，主动旋转低于反胶，但对中低强度来旋更不敏感。', typicalUse: '近台快攻、弹击、快挡和快速不转/弱旋变化。' },
+  'medium-pips': { label: '生胶/中颗粒', structure: '颗粒长度介于短颗粒与长颗粒之间。', behavior: '摩擦和形变响应更非线性，容易形成下沉、发飘和节奏变化。', typicalUse: '近台弹击、卸力挡、沉球和速度突变。' },
+  'long-pips': { label: '长胶', structure: '细长颗粒向外，可带薄海绵或不带海绵。', behavior: '颗粒弯折使回球受来球旋转影响显著，常表现为旋转延续后在对手视角形成“反转”、低速下沉或飘忽。', typicalUse: '削球、磕挡、拱、刮和节奏破坏。' },
+  'anti-spin': { label: '防弧胶', structure: '低摩擦反胶表面配低弹海绵。', behavior: '主动制造旋转能力弱，吸收速度并弱化或保留部分来旋，常产生很短、很死的不转/弱旋球。', typicalUse: '卸力挡、变节奏、控制强旋转来球。' },
+};
+
 export interface MachineSettings {
   strength: number;
   cadence: number;
@@ -54,6 +83,7 @@ const red = 0xff5d73;
 const blue = 0x54a0ff;
 const purple = 0xa66cff;
 const gold = 0xffd166;
+const teal = 0x2ed6c4;
 
 export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'serve-float-short', name: '无旋短发球', category: '开局发球', mode: 'serve', description: '本方近网先落台，过网后在对方近网区二跳。', speedMps: 4.8, topRpm: 0, sideRpm: 0, corkRpm: 0, firstBounceMm: 720, targetDepthMm: 1740, launchHeightMm: 1050, cadence: 0.8, spreadMm: 30, color: orange },
@@ -62,6 +92,17 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'serve-side-top', name: '侧上旋发球', category: '开局发球', mode: 'serve', description: '本方中短一跳，过网后二跳向前并向右窜。', speedMps: 5.2, topRpm: 2200, sideRpm: -2600, corkRpm: -900, firstBounceMm: 700, targetDepthMm: 2100, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
   { id: 'serve-reverse', name: '逆旋转发球', category: '开局发球', mode: 'serve', description: '逆向侧下旋，二跳方向与常规侧旋相反。', speedMps: 5.0, topRpm: -2500, sideRpm: -2900, corkRpm: -1000, firstBounceMm: 720, targetDepthMm: 1940, launchHeightMm: 1060, cadence: 0.7, spreadMm: 50, color: purple },
   { id: 'serve-fast-long', name: '奔球/急长', category: '开局发球', mode: 'serve', description: '本方较深一跳、低平过网，第二跳压接球方端线。', speedMps: 6.4, topRpm: 1500, sideRpm: 800, corkRpm: 300, firstBounceMm: 850, targetDepthMm: 2550, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: gold },
+  { id: 'serve-pendulum-top', name: '顺旋侧上', category: '开局发球', mode: 'serve', description: '正手顺旋动作制造侧上旋，落台后向前并横向窜出。', speedMps: 5.4, topRpm: 2600, sideRpm: 2900, corkRpm: 700, firstBounceMm: 735, targetDepthMm: 2180, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
+  { id: 'serve-reverse-top', name: '逆旋侧上', category: '开局发球', mode: 'serve', description: '逆旋转动作的侧上旋变化，侧拐方向与顺旋相反。', speedMps: 5.4, topRpm: 2400, sideRpm: -3000, corkRpm: -800, firstBounceMm: 730, targetDepthMm: 2160, launchHeightMm: 1060, cadence: 0.72, spreadMm: 50, color: purple },
+  { id: 'serve-tomahawk-back', name: '砍式侧下', category: '开局发球', mode: 'serve', description: '砍式/战斧动作从球侧下方摩擦，形成明显侧下旋。', speedMps: 5.1, topRpm: -3000, sideRpm: -3200, corkRpm: -1000, firstBounceMm: 740, targetDepthMm: 1950, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: purple },
+  { id: 'serve-tomahawk-top', name: '砍式侧上', category: '开局发球', mode: 'serve', description: '同类砍式引拍伪装下改摩擦球侧上方，形成侧上旋。', speedMps: 5.5, topRpm: 2300, sideRpm: -3200, corkRpm: -900, firstBounceMm: 720, targetDepthMm: 2200, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: purple },
+  { id: 'serve-hook-back', name: '勾式侧下', category: '开局发球', mode: 'serve', description: '勾式发球用内收路径刷球侧下部，侧旋比例较高。', speedMps: 5.0, topRpm: -2600, sideRpm: 3400, corkRpm: 1100, firstBounceMm: 720, targetDepthMm: 1900, launchHeightMm: 1070, cadence: 0.68, spreadMm: 55, color: purple },
+  { id: 'serve-high-toss-back', name: '高抛强下旋', category: '开局发球', mode: 'serve', description: '借高抛下落速度和手腕加速制造强下旋，二跳仍保持低短。', speedMps: 5.1, topRpm: -4800, sideRpm: 500, corkRpm: 200, firstBounceMm: 780, targetDepthMm: 1860, launchHeightMm: 1120, cadence: 0.6, spreadMm: 40, color: blue },
+  { id: 'serve-backhand-side', name: '反手侧下', category: '开局发球', mode: 'serve', description: '反手位横向摩擦配合切下动作，形成反方向侧下旋。', speedMps: 5.0, topRpm: -2500, sideRpm: -2700, corkRpm: -700, firstBounceMm: 745, targetDepthMm: 1980, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
+  { id: 'serve-shovel-back', name: '铲式侧下', category: '开局发球', mode: 'serve', description: '铲式/勺式动作从球侧下方横向刷过，旋转方向接近逆旋。', speedMps: 5.0, topRpm: -2700, sideRpm: -3200, corkRpm: -1100, firstBounceMm: 735, targetDepthMm: 1930, launchHeightMm: 1060, cadence: 0.68, spreadMm: 50, color: purple },
+  { id: 'serve-ghost', name: '回跳强下旋', category: '开局发球', mode: 'serve', description: '极薄摩擦制造高比例下旋，第二跳明显停顿，理想状态可向网方向回跳。', speedMps: 4.3, topRpm: -5600, sideRpm: 0, corkRpm: 0, firstBounceMm: 790, targetDepthMm: 1700, launchHeightMm: 1070, cadence: 0.55, spreadMm: 30, color: blue },
+  { id: 'serve-punch-float', name: '急不转偷袭', category: '开局发球', mode: 'serve', description: '相似发球准备下突然厚碰撞，形成快速、低旋转、压端线的不转偷袭。', speedMps: 7.0, topRpm: 180, sideRpm: 120, corkRpm: 50, firstBounceMm: 900, targetDepthMm: 2600, launchHeightMm: 1070, cadence: 0.65, spreadMm: 50, color: gold },
+  { id: 'serve-kicker', name: '侧上窜球', category: '开局发球', mode: 'serve', description: '侧上旋比例高，落台后二跳又向前又向侧面突然窜出。', speedMps: 5.7, topRpm: 3000, sideRpm: 3600, corkRpm: 1200, firstBounceMm: 740, targetDepthMm: 2260, launchHeightMm: 1080, cadence: 0.68, spreadMm: 55, color: purple },
   { id: 'float-short', name: '无旋短球', category: '基础球', description: '低速、近网落点，练习上步和小球处理。', speedMps: 4.2, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 1740, launchHeightMm: 1080, cadence: 1.1, spreadMm: 35, color: orange, shortcut: '1' },
   { id: 'float-long', name: '无旋长球', category: '基础球', description: '中速长落点，轨迹最接近纯抛体基准。', speedMps: 6.5, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 2480, launchHeightMm: 1120, cadence: 1.2, spreadMm: 45, color: orange, shortcut: '2' },
   { id: 'drive', name: '平击快攻', category: '基础球', description: '速度优先、旋转较少的快速进攻球。', speedMps: 9.0, topRpm: 900, sideRpm: 0, corkRpm: 0, targetDepthMm: 2420, launchHeightMm: 1190, cadence: 1.3, spreadMm: 55, color: orange, shortcut: '3' },
@@ -84,6 +125,14 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'side-back-left', name: '左侧下旋', category: '侧旋组合', description: '左侧偏转并在落台后减速。', speedMps: 5.4, topRpm: -3800, sideRpm: 2800, corkRpm: 1000, targetDepthMm: 2050, launchHeightMm: 1230, cadence: 1.0, spreadMm: 55, color: purple },
   { id: 'side-back-right', name: '右侧下旋', category: '侧旋组合', description: '右侧偏转并在落台后减速。', speedMps: 5.4, topRpm: -3800, sideRpm: -2800, corkRpm: -1000, targetDepthMm: 2050, launchHeightMm: 1230, cadence: 1.0, spreadMm: 55, color: purple },
 
+  { id: 'short-pips-hit', name: '正胶快弹', category: '异质胶皮', description: '短颗粒近台迎前弹击，速度直接、旋转较弱、弧线偏平。', speedMps: 9.2, topRpm: 650, sideRpm: 0, corkRpm: 0, targetDepthMm: 2430, launchHeightMm: 1160, cadence: 1.45, spreadMm: 55, color: teal },
+  { id: 'short-pips-block', name: '正胶快挡', category: '异质胶皮', description: '短颗粒借力快挡，来球到达更早但二跳前冲弱于反胶弧圈。', speedMps: 7.2, topRpm: 400, sideRpm: 0, corkRpm: 0, targetDepthMm: 2220, launchHeightMm: 1130, cadence: 1.55, spreadMm: 45, color: teal },
+  { id: 'medium-pips-sink', name: '生胶下沉', category: '异质胶皮', description: '中颗粒弹击后旋转少、轨迹平，过网后出现明显下沉和节奏突变。', speedMps: 7.6, topRpm: -300, sideRpm: 300, corkRpm: 180, targetDepthMm: 2290, launchHeightMm: 1160, cadence: 1.35, spreadMm: 75, color: teal },
+  { id: 'long-pips-chop', name: '长胶削回', category: '异质胶皮', description: '长胶借来球上旋形成对手视角的强下旋回球，速度慢但下沉明显。', speedMps: 4.8, topRpm: -4300, sideRpm: 250, corkRpm: 120, targetDepthMm: 2240, launchHeightMm: 1370, cadence: 0.85, spreadMm: 85, color: teal },
+  { id: 'long-pips-chop-block', name: '长胶磕挡', category: '异质胶皮', description: '近台长胶卸力磕挡，球短、低、下沉，旋转强度取决于来球。', speedMps: 4.3, topRpm: -2400, sideRpm: 500, corkRpm: 200, targetDepthMm: 1900, launchHeightMm: 1080, cadence: 1.1, spreadMm: 95, color: teal },
+  { id: 'long-pips-float', name: '长胶拱飘', category: '异质胶皮', description: '长胶主动拱推低旋转球，节奏慢且横向/纵向响应不稳定。', speedMps: 5.2, topRpm: -250, sideRpm: 450, corkRpm: 260, targetDepthMm: 2100, launchHeightMm: 1190, cadence: 1.0, spreadMm: 120, color: teal },
+  { id: 'anti-dead-block', name: '防弧卸力挡', category: '异质胶皮', description: '低摩擦防弧吸收速度，回球很死、很短，旋转显著弱化。', speedMps: 3.9, topRpm: -180, sideRpm: 80, corkRpm: 40, targetDepthMm: 1860, launchHeightMm: 1090, cadence: 1.0, spreadMm: 70, color: teal },
+
   { id: 'smash', name: '扣杀', category: '极限球', description: '高速、低旋转、深落点的压迫来球。', speedMps: 13.5, topRpm: 1200, sideRpm: 0, corkRpm: 0, targetDepthMm: 2520, launchHeightMm: 1370, cadence: 0.75, spreadMm: 90, color: gold },
   { id: 'top-extreme', name: '极强上旋', category: '极限球', description: '接近高水平旋转范围的强烈下扎球。', speedMps: 8.5, topRpm: 7800, sideRpm: 0, corkRpm: 0, targetDepthMm: 2390, launchHeightMm: 1380, cadence: 0.75, spreadMm: 80, color: gold },
   { id: 'back-extreme', name: '极强下旋', category: '极限球', description: '高强度下旋，落台后显著制动。', speedMps: 5.8, topRpm: -7800, sideRpm: 0, corkRpm: 0, targetDepthMm: 2180, launchHeightMm: 1430, cadence: 0.7, spreadMm: 70, color: gold },
@@ -91,8 +140,95 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
 ];
 
 export const SHOT_CATEGORIES: readonly ShotCategory[] = [
-  '开局发球', '基础球', '上旋进攻', '下旋控制', '侧旋组合', '极限球',
+  '开局发球', '基础球', '上旋进攻', '下旋控制', '侧旋组合', '异质胶皮', '极限球',
 ];
+
+const SERVE_FAMILIES: Record<string, string> = {
+  'serve-float-short': '不转短发球（动作伪装）',
+  'serve-back-short': '纯下旋短发球',
+  'serve-side-back': '正手顺旋侧下发球',
+  'serve-side-top': '侧上旋发球',
+  'serve-reverse': '逆旋转侧下发球',
+  'serve-fast-long': '奔球/急长发球',
+  'serve-pendulum-top': '正手顺旋侧上发球',
+  'serve-reverse-top': '逆旋转侧上发球',
+  'serve-tomahawk-back': '砍式/战斧侧下发球',
+  'serve-tomahawk-top': '砍式/战斧侧上发球',
+  'serve-hook-back': '勾式侧下发球',
+  'serve-high-toss-back': '高抛强下旋发球',
+  'serve-backhand-side': '反手侧下发球',
+  'serve-shovel-back': '铲式/勺式侧下发球',
+  'serve-ghost': '回跳/鬼球强下旋发球',
+  'serve-punch-float': '急不转/冲击式偷袭发球',
+  'serve-kicker': '高比例侧上旋窜球',
+};
+
+const SPECIAL_RUBBERS: Record<string, RubberKey[]> = {
+  'short-pips-hit': ['short-pips'], 'short-pips-block': ['short-pips'],
+  'medium-pips-sink': ['medium-pips'],
+  'long-pips-chop': ['long-pips'], 'long-pips-chop-block': ['long-pips'], 'long-pips-float': ['long-pips'],
+  'anti-dead-block': ['anti-spin'],
+};
+
+function classifyLength(preset: ShotPreset): BallLength {
+  if (preset.targetDepthMm < 2050) return 'short';
+  if (preset.targetDepthMm <= 2250) return 'half-long';
+  return 'long';
+}
+
+function commonRubbers(preset: ShotPreset): RubberKey[] {
+  if (SPECIAL_RUBBERS[preset.id]) return SPECIAL_RUBBERS[preset.id];
+  if (preset.topRpm <= -4200 || preset.mode === 'serve') return ['inverted-tacky', 'inverted-grippy'];
+  if (Math.abs(preset.topRpm) < 1000 && preset.speedMps >= 7) return ['short-pips', 'inverted-grippy'];
+  return ['inverted-grippy', 'inverted-tacky'];
+}
+
+export function getShotKnowledge(preset: ShotPreset): ShotKnowledge {
+  const length = classifyLength(preset);
+  const rubbers = commonRubbers(preset);
+  const side = Math.abs(preset.sideRpm) >= 1200;
+  const back = preset.topRpm <= -1200;
+  const top = preset.topRpm >= 1200;
+  const lowSpin = Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) < 1000;
+  const family = SERVE_FAMILIES[preset.id] ?? (
+    preset.id.startsWith('short-pips') ? '短颗粒近台快攻' :
+    preset.id.startsWith('medium-pips') ? '中颗粒节奏变化' :
+    preset.id.startsWith('long-pips') ? '长胶旋转/节奏变化' :
+    preset.id.startsWith('anti-') ? '防弧卸力变化' :
+    preset.category
+  );
+  const production = preset.mode === 'serve'
+    ? `${family}通常由手腕和前臂加速、薄摩擦球的${back ? '侧下部' : top ? '侧上部' : '中下部'}产生；触球厚薄与拍面角度用来在相似动作中切换旋转和速度。`
+    : rubbers[0] === 'long-pips'
+      ? '长颗粒受来球切向速度驱动发生弯折，主动挥拍与来旋共同决定回球；同一动作会随入射旋转变化。'
+      : rubbers[0] === 'anti-spin'
+        ? '低摩擦表面和低弹海绵吸收速度，主要靠拍面方向和碰撞厚度控制落点，而非主动摩擦造旋。'
+        : rubbers[0] === 'medium-pips'
+          ? '中颗粒在迎前碰撞时产生较直接的反弹，颗粒形变削弱稳定摩擦，使球出现低旋转和下沉感。'
+          : rubbers[0] === 'short-pips'
+            ? '短颗粒以迎前碰撞和较短加速制造速度，摩擦量低于反胶，出球更直接。'
+            : `${family}主要由反胶摩擦与碰撞配比产生；薄摩擦提高旋转，厚碰撞提高速度。`;
+  const flight = lowSpin
+    ? '空气中马格努斯力较弱，轨迹更接近受阻抛体；速度或落点的小变化更容易表现为“飘”。'
+    : `${back ? '下旋提供向上的马格努斯分量，球更飘、飞行更长' : top ? '上旋提供向下的马格努斯分量，球会更快下扎' : '主要旋转不直接控制上下弧线'}${side ? '；侧旋同时造成横向弯曲' : ''}。`;
+  const bounce = back
+    ? '触台摩擦会削弱前进速度，强下旋可能表现为停顿或二跳变短。'
+    : top
+      ? '触台后旋转转化为前进速度，二跳会前冲并压缩反应时间。'
+      : side
+        ? '触台后横向速度发生变化，二跳侧拐通常比空中弯曲更明显。'
+        : '落台后方向变化较小，主要由入射速度、角度和胶皮回弹决定。';
+  const readingCues = preset.mode === 'serve'
+    ? `优先看触球瞬间而不是随挥：拍面切向运动决定${back ? '下旋' : top ? '上旋' : '弱旋/不转'}，再结合第一落点、过网高度和第二跳是否${length === 'short' ? '留在台内' : length === 'half-long' ? '靠近端线' : '快速出台'}判断长短。`
+    : `观察出手动作、球体标记转速、过网弧线与第一跳后的加速变化；${side ? '还要确认侧拐方向，不能只判断上下旋。' : '重点确认旋转强度而不只看速度。'}`;
+  const tacticalIntent = length === 'short'
+    ? '限制直接大幅度进攻，诱导摆短、劈长、挑打或拧拉，并为下一板创造落点机会。'
+    : length === 'half-long'
+      ? '让接球者在台内与出台判断之间犹豫；处理过早容易够球，过晚又失去最高点。'
+      : '压迫端线和身体位置，逼迫快速移动、借力防守或在下降期处理。';
+  const handlingFocus = `${back ? '拍面需更开放并主动向前上方制造过网弧线' : top ? '拍面适当关闭并缩短动作，控制反弹上扬' : '不要把不转球当下旋过度托高'}${side ? '；拍面横向补偿侧旋，并优先把球送向旋转来向的安全区域' : ''}。`;
+  return { family, length, commonRubbers: rubbers, production, flight, bounce, readingCues, tacticalIntent, handlingFocus };
+}
 
 const BALL_RADIUS = 0.020;
 const BALL_MASS = 0.0027;

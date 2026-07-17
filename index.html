@@ -30,6 +30,8 @@
   .view-buttons { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:5px; }
   .view-buttons button { margin:0; padding:6px 3px; border:1px solid #4e5975; border-radius:6px; background:#242940; color:#cdd7ef; font-size:11px; cursor:pointer; }
   .view-buttons button:hover { background:#303851; }
+  .view-buttons button[hidden] { display:none; }
+  .view-buttons button:disabled { opacity:.42; cursor:not-allowed; background:#202438; }
   .view-buttons button.active { border-color:#ffd166; background:rgba(255,209,102,.18); color:#fff2c2; box-shadow:0 0 0 1px rgba(255,209,102,.2) inset; }
   .quick-view-section { margin-top:10px; padding:10px; border-radius:8px; background:rgba(84,214,255,.055); }
   .quick-view-section h3 { margin:0 0 7px; font-size:12px; color:#dce4ff; }
@@ -38,11 +40,22 @@
   .quick-view-buttons button:hover { background:#303851; }
   .quick-view-buttons button.active { border-color:#54d6ff; background:rgba(84,214,255,.16); color:#d9f7ff; box-shadow:0 0 0 1px rgba(84,214,255,.2) inset; }
   .quick-view-note { margin-top:6px; color:#8fa1b7; font-size:10px; line-height:1.4; }
-  .tracking-actions { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:5px; margin-top:7px; }
+  .tracking-actions { display:grid; grid-template-columns:1.35fr 1fr 1fr; gap:6px; margin-top:7px; }
   .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
+  .tracking-actions button.active { border-color:#ff697d; background:rgba(255,93,115,.14); color:#ff9aaa; }
   .tracking-actions button.secondary { border-color:#59647f; background:#242940; color:#aeb8ca; }
+  .tracking-switch { min-height:32px; display:flex; align-items:center; justify-content:center; gap:6px; padding:5px; border:1px solid #59647f; border-radius:6px; color:#aeb8ca; background:#242940; cursor:pointer; user-select:none; }
+  .tracking-switch input { appearance:none; width:28px; height:16px; border-radius:10px; background:#454d68; position:relative; cursor:pointer; transition:background .18s; }
+  .tracking-switch input::after { content:""; position:absolute; width:12px; height:12px; left:2px; top:2px; border-radius:50%; background:#c6cede; transition:transform .18s; }
+  .tracking-switch input:checked { background:#23845d; }
+  .tracking-switch input:checked::after { transform:translateX(12px); background:#fff; }
+  .tracking-switch:has(input:checked) { border-color:#5ee6a8; color:#9df1c7; background:rgba(94,230,168,.1); }
   .tracking-status { margin-top:7px; min-height:34px; padding:6px 7px; border-radius:5px; background:rgba(84,214,255,.07); color:#aebdd1; line-height:1.45; }
   .tracking-status strong { color:#fff; }
+  #receive-failure-flash { position:fixed; inset:0; z-index:90; display:grid; place-items:center; pointer-events:none; opacity:0; background:radial-gradient(circle at center, transparent 28%, rgba(190,0,18,.24) 66%, rgba(255,18,42,.78) 100%); box-shadow:inset 0 0 110px 32px rgba(255,0,32,.78); }
+  #receive-failure-flash.active { animation:receive-failure .68s ease-out; }
+  #receive-failure-flash span { padding:10px 18px; border:1px solid rgba(255,210,214,.75); border-radius:8px; color:#fff; background:rgba(105,0,14,.82); font-weight:750; font-size:16px; letter-spacing:.08em; text-shadow:0 1px 4px #400; transform:scale(.96); }
+  @keyframes receive-failure { 0% { opacity:0; } 12% { opacity:1; } 38% { opacity:.72; } 100% { opacity:0; } }
   .tracking-speed { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; margin-top:8px; color:#aebdd1; }
   .tracking-speed input { width:100%; accent-color:#54d6ff; }
   .tracking-speed output { min-width:38px; text-align:right; color:#fff; font-variant-numeric:tabular-nums; }
@@ -110,7 +123,7 @@
   .machine-window .machine-header h2, .demo-window .demo-header h2 { font-size:15px; color:#fff; }
   .machine-window .window-body { padding-top:0; }
   .demo-window .window-body { padding-top:0; }
-  dialog { margin:auto; width:min(560px,calc(100vw - 32px)); color:#e9edf7; background:#171a2d; border:1px solid #59647f; border-radius:12px; padding:20px; line-height:1.6; }
+  dialog { margin:auto; width:min(680px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto; color:#e9edf7; background:#171a2d; border:1px solid #59647f; border-radius:12px; padding:20px; line-height:1.6; }
   dialog::backdrop { background:rgba(4,5,12,.72); backdrop-filter:blur(3px); }
   dialog h2 { margin-bottom:8px; } dialog h3 { margin-top:12px; color:#ffd166; font-size:13px; }
   dialog p, dialog li { color:#b9c3d5; } dialog ul { padding-left:20px; }
@@ -133,6 +146,7 @@
 </head>
 <body>
 <div id="c"></div>
+<div id="receive-failure-flash" role="status" aria-live="assertive"><span id="receive-failure-reason">接球失败</span></div>
 <nav class="ui-dock" aria-label="功能窗口">
   <button class="ui-icon" type="button" data-window-toggle="utility-window" title="工具与说明" aria-label="工具与说明"><i data-lucide="wrench"></i></button>
   <button class="ui-icon is-open" type="button" data-window-toggle="machine-window" title="发球机与击球点" aria-label="发球机与击球点"><i data-lucide="bot"></i></button>
@@ -219,7 +233,13 @@
         <button type="button" data-view-height="1600" class="active">成人 1.6m</button>
         <button type="button" data-view-height="1800">高个 1.8m</button>
       </div>
-      <h3>站位</h3>
+      <h3>接球身位模式</h3>
+      <div class="view-buttons" id="stance-modes">
+        <button type="button" data-stance-mode="fixed" class="active">固定身位</button>
+        <button type="button" data-stance-mode="auto">自动移动</button>
+      </div>
+      <div id="stance-status" class="quick-view-note"><strong>当前身位：</strong>固定 · 中台</div>
+      <h3>固定身位</h3>
       <div class="view-buttons" id="view-stances">
         <button type="button" data-view-stance="near">近台</button>
         <button type="button" data-view-stance="mid" class="active">中台</button>
@@ -244,19 +264,27 @@
       <div class="view-buttons" id="contact-techniques">
         <button type="button" data-contact-technique="forehand-loop" class="active">正手拉球</button>
         <button type="button" data-contact-technique="forehand-drive">正手快攻</button>
-        <button type="button" data-contact-technique="backhand-loop">反手拧拉</button>
+        <button type="button" data-contact-technique="backhand-loop">反手拉球</button>
+        <button type="button" data-contact-technique="counter-loop">反拉</button>
         <button type="button" data-contact-technique="block">快带/挡</button>
+        <button type="button" data-contact-technique="punch">弹击</button>
         <button type="button" data-contact-technique="push">搓球</button>
+        <button type="button" data-contact-technique="drop-shot">摆短</button>
+        <button type="button" data-contact-technique="long-push">劈长</button>
+        <button type="button" data-contact-technique="lift">托球</button>
+        <button type="button" data-contact-technique="forehand-flick">正手挑打</button>
+        <button type="button" data-contact-technique="backhand-flick">反手拧拉</button>
         <button type="button" data-contact-technique="chop">削球</button>
+        <button type="button" data-contact-technique="smash">扣杀</button>
+        <button type="button" data-contact-technique="lob">放高球</button>
       </div>
       <div class="tracking-actions">
-        <button id="tracking-start" type="button">跟球至击球瞬间</button>
-        <button id="tracking-continuous" class="secondary" type="button">连续跟球</button>
-        <button id="tracking-replay" class="secondary" type="button" disabled>慢放回看</button>
-        <button id="tracking-stop" class="secondary" type="button">退出跟球</button>
+        <button id="tracking-start" type="button">开启跟球</button>
+        <label class="tracking-switch"><input id="tracking-continuous" type="checkbox"><span>连续</span></label>
+        <label class="tracking-switch"><input id="tracking-replay" type="checkbox"><span>慢放回看</span></label>
       </div>
       <button id="tracking-replay-pause" class="secondary" type="button" disabled style="width:100%;margin-top:5px">暂停回放</button>
-      <label class="tracking-speed">跟球慢放速度<input id="tracking-speed" type="range" min="0.35" max="1" value="1" step="0.05"><output id="tracking-speed-value">1.00×</output></label>
+      <label class="tracking-speed">回放速度<input id="tracking-speed" type="range" min="0.35" max="1" value="0.5" step="0.05"><output id="tracking-speed-value">0.50×</output></label>
       <div id="tracking-status" class="tracking-status"><strong>正手拉球</strong>：身体右前方，在最高点附近或下降初段迎球。</div>
     </div>
   </div>
