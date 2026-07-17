@@ -33,6 +33,16 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
   `showReceiveFailure('错过第一合理处理点：落台后上升初期的可下压窗口')`  
 - 不新做另一套闪光；可微调文案，动画沿用 `receive-failure`。
 
+### 触发时机（已校准：A）
+
+**球刚越过窗口 A 时立刻闪一次**（上升可下压段结束之际），不要等到回合结束再总结。
+
+实现要点：
+
+- 跟踪循环中维护 `windowAArmed` / `windowAMissSignaled`
+- 当采样判定「窗口 A 已结束」且「该接球方未能在窗口内形成合法可处理触球」→ 调用一次 `showReceiveFailure(...)`
+- 同一球只闪一次，避免上升段每帧重复触发
+
 ## 领域模块
 
 新增 `src/lobProcessability.ts`：
