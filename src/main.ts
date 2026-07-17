@@ -1823,10 +1823,49 @@ syncWindowIndicators();
 
 // ==================== Loop ====================
 let frames = 0, ft = 0, fps = 0, lastT = performance.now();
+let pageHiddenAt: number | null = document.hidden ? lastT : null;
+
+function resumeSimulationClock(now: number): void {
+  if (pageHiddenAt === null) {
+    lastT = now;
+    return;
+  }
+  const pausedMs = Math.max(0, now - pageHiddenAt);
+  pageHiddenAt = null;
+  lastT = now;
+
+  // All absolute deadlines must move forward by the hidden duration. Physics
+  // and replay clocks are delta-based and therefore need no catch-up step.
+  if (machineRunning) nextMachineShotAt += pausedMs;
+  if (trackingEnabled) trackingNextShotAt += pausedMs;
+  if (trackingSession) {
+    trackingSession.startedAt += pausedMs;
+    trackingSession.phaseStartedAt += pausedMs;
+    trackingRecordingStartedAt += pausedMs;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  const now = performance.now();
+  if (document.hidden) {
+    pageHiddenAt = now;
+    lastT = now;
+  } else {
+    resumeSimulationClock(now);
+  }
+});
 
 function animate(): void {
   requestAnimationFrame(animate);
   const now = performance.now();
+  if (document.hidden) {
+    // Browsers throttle requestAnimationFrame in background tabs. Advancing a
+    // capped 100 ms on each throttled callback creates an unintended slow-
+    // motion simulation, so hidden frames intentionally advance nothing.
+    if (pageHiddenAt === null) pageHiddenAt = now;
+    lastT = now;
+    return;
+  }
   const elapsedMs = Math.min(now - lastT, 100);
   lastT = now;
 
