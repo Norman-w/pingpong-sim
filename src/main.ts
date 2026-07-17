@@ -567,6 +567,7 @@ function createMachineModel(): { group: THREE.Group; head: THREE.Group; upperMas
 }
 
 const machineModel = createMachineModel();
+const currentMachineBallOrigin = new THREE.Vector3(45, 1120, TABLE_CENTER_Z);
 
 function setMachineVisible(visible: boolean): void {
   machineModel.group.visible = visible;
@@ -886,10 +887,17 @@ function readMachineSettings(): MachineSettings {
   };
 }
 
-function updateMachineHead(heightMm: number): void {
-  machineModel.head.position.y = heightMm;
+function updateMachinePose(solution: LaunchSolution): void {
+  const { originMm, velocityMm } = solution;
+  currentMachineBallOrigin.set(originMm.x, originMm.y, originMm.z);
+  machineModel.group.position.set(originMm.x - 45, 0, originMm.z - TABLE_CENTER_Z);
+  machineModel.head.position.y = originMm.y;
+  const horizontalSpeed = Math.hypot(velocityMm.x, velocityMm.z);
+  machineModel.head.rotation.order = 'ZYX';
+  machineModel.head.rotation.z = Math.atan2(velocityMm.y, horizontalSpeed);
+  machineModel.head.rotation.y = -Math.atan2(velocityMm.z, velocityMm.x);
   const lowerY = 970;
-  const upperY = heightMm - 90;
+  const upperY = originMm.y - 90;
   machineModel.upperMast.position.y = (lowerY + upperY) / 2;
   machineModel.upperMast.scale.y = Math.max(1, upperY - lowerY);
 }
@@ -914,8 +922,11 @@ function updateMachineDetails(solution?: LaunchSolution): void {
   strengthValueEl.textContent = `${Math.round(settings.strength * 100)}%`;
   cadenceValueEl.textContent = `${settings.cadence.toFixed(1)} 球/秒`;
   const clearance = solution ? ` · 过网余量 ${Math.round(solution.netClearanceMm)}mm` : '';
+  const predictedFirst = solution?.serveImpactsMm?.first;
+  const predictedSecond = solution?.serveImpactsMm?.second;
   const serveRoute = activePreset.mode === 'serve'
-    ? `<br>双跳路线 <span style="color:#54d6ff">● ${activePreset.firstBounceMm ?? 720}mm</span> → <span style="color:#ffd166">● ${activePreset.targetDepthMm}mm</span>`
+    ? `<br>双跳路线 <span style="color:#54d6ff">● ${Math.round(predictedFirst?.x ?? activePreset.firstBounceMm ?? 720)}mm</span> → <span style="color:#ffd166">● ${Math.round(predictedSecond?.x ?? activePreset.targetDepthMm)}mm</span>` +
+      (solution ? `<br>出手位置：端线后 ${Math.max(0, Math.round(-solution.originMm.x))}mm · 高 ${Math.round(solution.originMm.y)}mm${predictedFirst ? ` · ${Math.round(predictedFirst.timeMs)}ms 后第一跳` : ''}` : '')
     : '';
   const lengthLabel = knowledge.length === 'short' ? '短球/预计台内二跳' : knowledge.length === 'half-long' ? '半出台球' : '长球/出台球';
   const rubberLabels = knowledge.commonRubbers.map(key => RUBBER_PROFILES[key].label).join('、');
@@ -1030,7 +1041,7 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
     isOpeningServe: preset.mode === 'serve',
     shownImpactCount: 0,
   });
-  updateMachineHead(solution.originMm.y);
+  updateMachinePose(solution);
   targetMarker.position.set(solution.targetMm.x, TABLE_TOP_Y + 2, solution.targetMm.z);
   targetMarker.visible = true;
   const isOpeningServe = preset.mode === 'serve';
@@ -1085,9 +1096,9 @@ const incomingSource: {
   // Future opponent-release tracking can replace this source without
   // changing the camera state machine or contact-point logic.
   kind: 'machine',
-  label: '发球机（固定）',
-  note: '后续可接入对手出拍位置',
-  position: () => new THREE.Vector3(25, machineModel.head.position.y, -762.5),
+  label: '发球机（动态站位）',
+  note: '按发球类型调整出手位置、高度与角度',
+  position: () => currentMachineBallOrigin.clone(),
 };
 const trackingStartEl = document.getElementById('tracking-start') as HTMLButtonElement;
 const trackingContinuousEl = document.getElementById('tracking-continuous') as HTMLInputElement;

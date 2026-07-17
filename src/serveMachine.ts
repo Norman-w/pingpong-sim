@@ -31,6 +31,13 @@ export interface ShotPreset {
   firstBounceMm?: number;
 }
 
+interface ServeProfile {
+  originXmm: number;
+  originZmm: number;
+  minNetClearanceMm: number;
+  maxNetClearanceMm: number;
+}
+
 export type RubberKey = 'inverted-grippy' | 'inverted-tacky' | 'short-pips' | 'medium-pips' | 'long-pips' | 'anti-spin';
 export type BallLength = 'short' | 'half-long' | 'long';
 export interface RubberProfile {
@@ -76,7 +83,34 @@ export interface LaunchSolution {
   speedMps: number;
   spinRpm: number;
   netClearanceMm: number;
+  serveImpactsMm?: {
+    first: { x: number; z: number; timeMs: number };
+    second: { x: number; z: number; timeMs: number };
+  };
 }
+
+// Contact point and acceptable net window for each serve family. The machine
+// stands behind the server's end line (negative X) and changes lateral stance
+// instead of unrealistically releasing every serve from table centre.
+const SERVE_PROFILES: Record<string, ServeProfile> = {
+  'serve-float-short':     { originXmm: -55, originZmm: -1060, minNetClearanceMm: 24, maxNetClearanceMm: 115 },
+  'serve-back-short':      { originXmm: -65, originZmm: -1080, minNetClearanceMm: 22, maxNetClearanceMm: 105 },
+  'serve-side-back':       { originXmm: -70, originZmm: -1110, minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-side-top':        { originXmm: -70, originZmm: -1080, minNetClearanceMm: 20, maxNetClearanceMm: 100 },
+  'serve-reverse':         { originXmm: -65, originZmm: -1060, minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-fast-long':       { originXmm: -105, originZmm: -1160, minNetClearanceMm: 16, maxNetClearanceMm: 65 },
+  'serve-pendulum-top':    { originXmm: -70, originZmm: -1080, minNetClearanceMm: 20, maxNetClearanceMm: 95 },
+  'serve-reverse-top':     { originXmm: -65, originZmm: -1040, minNetClearanceMm: 20, maxNetClearanceMm: 95 },
+  'serve-tomahawk-back':   { originXmm: -60, originZmm: -360,  minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-tomahawk-top':    { originXmm: -60, originZmm: -380,  minNetClearanceMm: 20, maxNetClearanceMm: 100 },
+  'serve-hook-back':       { originXmm: -70, originZmm: -1120, minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-high-toss-back':  { originXmm: -75, originZmm: -1080, minNetClearanceMm: 24, maxNetClearanceMm: 120 },
+  'serve-backhand-side':   { originXmm: -80, originZmm: -1180, minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-shovel-back':     { originXmm: -65, originZmm: -1040, minNetClearanceMm: 22, maxNetClearanceMm: 110 },
+  'serve-ghost':           { originXmm: -65, originZmm: -1040, minNetClearanceMm: 26, maxNetClearanceMm: 125 },
+  'serve-punch-float':     { originXmm: -110, originZmm: -1180, minNetClearanceMm: 15, maxNetClearanceMm: 60 },
+  'serve-kicker':          { originXmm: -75, originZmm: -1080, minNetClearanceMm: 18, maxNetClearanceMm: 90 },
+};
 
 const orange = 0xff9f43;
 const red = 0xff5d73;
@@ -91,7 +125,7 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'serve-side-back', name: '侧下旋发球', category: '开局发球', mode: 'serve', description: '本方中短一跳，过网后向左侧拐并带下旋。', speedMps: 5.0, topRpm: -2800, sideRpm: 2400, corkRpm: 900, firstBounceMm: 720, targetDepthMm: 1940, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
   { id: 'serve-side-top', name: '侧上旋发球', category: '开局发球', mode: 'serve', description: '本方中短一跳，过网后二跳向前并向右窜。', speedMps: 5.2, topRpm: 2200, sideRpm: -2600, corkRpm: -900, firstBounceMm: 700, targetDepthMm: 2100, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
   { id: 'serve-reverse', name: '逆旋转发球', category: '开局发球', mode: 'serve', description: '逆向侧下旋，二跳方向与常规侧旋相反。', speedMps: 5.0, topRpm: -2500, sideRpm: -2900, corkRpm: -1000, firstBounceMm: 720, targetDepthMm: 1940, launchHeightMm: 1060, cadence: 0.7, spreadMm: 50, color: purple },
-  { id: 'serve-fast-long', name: '奔球/急长', category: '开局发球', mode: 'serve', description: '本方较深一跳、低平过网，第二跳压接球方端线。', speedMps: 6.4, topRpm: 1500, sideRpm: 800, corkRpm: 300, firstBounceMm: 850, targetDepthMm: 2550, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: gold },
+  { id: 'serve-fast-long', name: '奔球/急长', category: '开局发球', mode: 'serve', description: '低重心贴近端线触球，本方端线附近快速一跳后低平过网，第二跳压接球方端线。', speedMps: 10.0, topRpm: 1800, sideRpm: 700, corkRpm: 250, firstBounceMm: 300, targetDepthMm: 2620, launchHeightMm: 900, cadence: 0.7, spreadMm: 45, color: gold },
   { id: 'serve-pendulum-top', name: '顺旋侧上', category: '开局发球', mode: 'serve', description: '正手顺旋动作制造侧上旋，落台后向前并横向窜出。', speedMps: 5.4, topRpm: 2600, sideRpm: 2900, corkRpm: 700, firstBounceMm: 735, targetDepthMm: 2180, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
   { id: 'serve-reverse-top', name: '逆旋侧上', category: '开局发球', mode: 'serve', description: '逆旋转动作的侧上旋变化，侧拐方向与顺旋相反。', speedMps: 5.4, topRpm: 2400, sideRpm: -3000, corkRpm: -800, firstBounceMm: 730, targetDepthMm: 2160, launchHeightMm: 1060, cadence: 0.72, spreadMm: 50, color: purple },
   { id: 'serve-tomahawk-back', name: '砍式侧下', category: '开局发球', mode: 'serve', description: '砍式/战斧动作从球侧下方摩擦，形成明显侧下旋。', speedMps: 5.1, topRpm: -3000, sideRpm: -3200, corkRpm: -1000, firstBounceMm: 740, targetDepthMm: 1950, launchHeightMm: 1080, cadence: 0.7, spreadMm: 55, color: purple },
@@ -101,7 +135,7 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'serve-backhand-side', name: '反手侧下', category: '开局发球', mode: 'serve', description: '反手位横向摩擦配合切下动作，形成反方向侧下旋。', speedMps: 5.0, topRpm: -2500, sideRpm: -2700, corkRpm: -700, firstBounceMm: 745, targetDepthMm: 1980, launchHeightMm: 1060, cadence: 0.75, spreadMm: 45, color: purple },
   { id: 'serve-shovel-back', name: '铲式侧下', category: '开局发球', mode: 'serve', description: '铲式/勺式动作从球侧下方横向刷过，旋转方向接近逆旋。', speedMps: 5.0, topRpm: -2700, sideRpm: -3200, corkRpm: -1100, firstBounceMm: 735, targetDepthMm: 1930, launchHeightMm: 1060, cadence: 0.68, spreadMm: 50, color: purple },
   { id: 'serve-ghost', name: '回跳强下旋', category: '开局发球', mode: 'serve', description: '极薄摩擦制造高比例下旋，第二跳明显停顿，理想状态可向网方向回跳。', speedMps: 4.3, topRpm: -5600, sideRpm: 0, corkRpm: 0, firstBounceMm: 790, targetDepthMm: 1700, launchHeightMm: 1070, cadence: 0.55, spreadMm: 30, color: blue },
-  { id: 'serve-punch-float', name: '急不转偷袭', category: '开局发球', mode: 'serve', description: '相似发球准备下突然厚碰撞，形成快速、低旋转、压端线的不转偷袭。', speedMps: 7.0, topRpm: 180, sideRpm: 120, corkRpm: 50, firstBounceMm: 900, targetDepthMm: 2600, launchHeightMm: 1070, cadence: 0.65, spreadMm: 50, color: gold },
+  { id: 'serve-punch-float', name: '急不转偷袭', category: '开局发球', mode: 'serve', description: '低重心在端线后突然厚碰撞，近端线一跳后快速压向接球方底线。', speedMps: 10.4, topRpm: 180, sideRpm: 120, corkRpm: 50, firstBounceMm: 320, targetDepthMm: 2630, launchHeightMm: 910, cadence: 0.65, spreadMm: 40, color: gold },
   { id: 'serve-kicker', name: '侧上窜球', category: '开局发球', mode: 'serve', description: '侧上旋比例高，落台后二跳又向前又向侧面突然窜出。', speedMps: 5.7, topRpm: 3000, sideRpm: 3600, corkRpm: 1200, firstBounceMm: 740, targetDepthMm: 2260, launchHeightMm: 1080, cadence: 0.68, spreadMm: 55, color: purple },
   { id: 'float-short', name: '无旋短球', category: '基础球', description: '低速、近网落点，练习上步和小球处理。', speedMps: 4.2, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 1740, launchHeightMm: 1080, cadence: 1.1, spreadMm: 35, color: orange, shortcut: '1' },
   { id: 'float-long', name: '无旋长球', category: '基础球', description: '中速长落点，轨迹最接近纯抛体基准。', speedMps: 6.5, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 2480, launchHeightMm: 1120, cadence: 1.2, spreadMm: 45, color: orange, shortcut: '2' },
@@ -316,10 +350,14 @@ function simulateToTarget(
 function evaluateServe(
   origin: SimState,
   angularVelocity: { x: number; y: number; z: number },
-): { firstX?: number; secondX?: number; netY: number } {
+): {
+  first?: { x: number; z: number; time: number };
+  second?: { x: number; z: number; time: number };
+  netY: number;
+} {
   const state = { ...origin };
   const w = { ...angularVelocity };
-  const hits: number[] = [];
+  const hits: Array<{ x: number; z: number; time: number }> = [];
   let netY = 0;
   let sawNet = false;
   const dt = 1 / 480;
@@ -331,7 +369,7 @@ function evaluateServe(
       state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
       state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
     ) {
-      hits.push(state.x);
+      hits.push({ x: state.x, z: state.z, time: t });
       const impact = Math.abs(state.vy);
       const restitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impact));
       const contactVx = state.vx + w.z * BALL_RADIUS;
@@ -355,7 +393,7 @@ function evaluateServe(
       if (hits.length >= 2) break;
     }
   }
-  return { firstX: hits[0], secondX: hits[1], netY };
+  return { first: hits[0], second: hits[1], netY };
 }
 
 function randomTargetZ(settings: MachineSettings, spreadMm: number): number {
@@ -379,25 +417,60 @@ export function solveLaunch(
     y: preset.sideRpm * spinScale * RPM_TO_RAD,
     z: -preset.topRpm * spinScale * RPM_TO_RAD,
   };
-  const targetX = preset.targetDepthMm / 1000 +
+  let targetX = preset.targetDepthMm / 1000 +
     (settings.randomize ? (Math.random() - 0.5) * preset.spreadMm / 1500 : 0);
-  const targetZ = randomTargetZ(settings, preset.spreadMm);
+  let targetZ = randomTargetZ(settings, preset.spreadMm);
   if (preset.mode === 'serve') {
     // A legal table-tennis serve first descends onto the server's half, then
     // clears the net after the bounce and lands on the receiver's half.
     // These launch values are calibrated to that two-bounce geometry; spin
     // and the explicit table-contact impulse create the selected kick.
-    const originX = MACHINE_BALL_ORIGIN_X;
+    const profile = SERVE_PROFILES[preset.id] ?? {
+      originXmm: -60, originZmm: -762.5, minNetClearanceMm: 22, maxNetClearanceMm: 115,
+    };
+    targetX = Math.max(NET_X + 0.12, Math.min(2.65, targetX));
+    targetZ = Math.max(-1.43, Math.min(-0.095, targetZ));
+    const originX = profile.originXmm / 1000;
     const originY = preset.launchHeightMm / 1000;
-    const originZ = -0.7625;
-    const preferredVx = Math.max(3.8, Math.min(6.7, preset.speedMps * strength));
+    const originZ = profile.originZmm / 1000;
+    const preferredVx = Math.max(3.8, Math.min(11.2, speed));
     const firstTargetX = (preset.firstBounceMm ?? 720) / 1000;
+    const firstTargetRatio = Math.max(0, Math.min(1, (firstTargetX - originX) / (targetX - originX)));
+    const firstTargetZ = originZ + (targetZ - originZ) * firstTargetRatio;
     let vy = -2.2;
     let vx = preferredVx;
     let vz = 0;
     let bestScore = Number.POSITIVE_INFINITY;
-    for (let speedStep = -8; speedStep <= 8; speedStep += 1) {
-      const candidateVx = Math.max(3.5, Math.min(7.0, preferredVx + speedStep * 0.12));
+
+    const scoreOutcome = (
+      outcome: ReturnType<typeof evaluateServe>,
+      candidateVx: number,
+    ): number => {
+      if (!outcome.first || !outcome.second) return 500;
+      const netClearanceMm = (outcome.netY - 0.937) * 1000;
+      let score = Math.abs(outcome.first.x - firstTargetX) * 4.2;
+      score += Math.abs(outcome.second.x - targetX) * 5.0;
+      score += Math.abs(outcome.first.z - firstTargetZ) * 1.2;
+      score += Math.abs(outcome.second.z - targetZ) * 4.5;
+      if (outcome.first.x >= NET_X - 0.02) score += 200;
+      if (outcome.second.x <= NET_X + 0.02 || outcome.second.x >= 2.70) score += 200;
+      if (outcome.first.z < -1.47 || outcome.first.z > -0.055) score += 200;
+      if (outcome.second.z < -1.45 || outcome.second.z > -0.075) score += 200;
+      if (netClearanceMm < profile.minNetClearanceMm) {
+        score += (profile.minNetClearanceMm - netClearanceMm) * 0.22 + 100;
+      }
+      if (netClearanceMm > profile.maxNetClearanceMm) {
+        score += (netClearanceMm - profile.maxNetClearanceMm) * 0.035;
+      }
+      // For near-end-line first bounces, favour the shortest contact-to-table
+      // interval that still satisfies the complete two-bounce route.
+      if (firstTargetX < 0.45) score += outcome.first.time * 0.9;
+      score += Math.abs(candidateVx - preferredVx) * 0.025;
+      return score;
+    };
+
+    for (let speedStep = -14; speedStep <= 14; speedStep += 1) {
+      const candidateVx = Math.max(3.5, Math.min(11.6, preferredVx + speedStep * 0.15));
       const travel = Math.max(0.32, (targetX - originX) / candidateVx);
       const candidateVz = (targetZ - originZ) / travel;
       for (let i = 0; i <= 70; i += 1) {
@@ -406,18 +479,71 @@ export function solveLaunch(
           { x: originX, y: originY, z: originZ, vx: candidateVx, vy: candidateVy, vz: candidateVz },
           angularVelocity,
         );
-        let score = outcome.secondX === undefined ? 50 : Math.abs(outcome.secondX - targetX) * 2;
-        score += outcome.firstX === undefined ? 50 : Math.abs(outcome.firstX - firstTargetX) * 1.3;
-        if (outcome.firstX !== undefined && outcome.firstX >= NET_X) score += 50;
-        if (outcome.secondX !== undefined && (outcome.secondX <= NET_X || outcome.secondX >= 2.72)) score += 50;
-        if (outcome.netY < 0.965) score += (0.965 - outcome.netY) * 30;
-        if (outcome.netY > 1.12) score += (outcome.netY - 1.12) * 2;
-        score += Math.abs(candidateVx - preferredVx) * 0.035;
+        const score = scoreOutcome(outcome, candidateVx);
         if (score < bestScore) {
           bestScore = score; vx = candidateVx; vy = candidateVy; vz = candidateVz;
         }
       }
     }
+
+    // Side-spin bends between launch and the second bounce. Correct the
+    // lateral launch component against the simulated second impact instead of
+    // assuming a straight line from source to target.
+    for (let correction = 0; correction < 4; correction += 1) {
+      const current = evaluateServe(
+        { x: originX, y: originY, z: originZ, vx, vy, vz }, angularVelocity,
+      );
+      if (!current.second) break;
+      const correctedVz = vz + (targetZ - current.second.z) / Math.max(current.second.time, 0.2) * 0.82;
+      const corrected = evaluateServe(
+        { x: originX, y: originY, z: originZ, vx, vy, vz: correctedVz }, angularVelocity,
+      );
+      const correctedScore = scoreOutcome(corrected, vx);
+      if (correctedScore >= bestScore) break;
+      vz = correctedVz;
+      bestScore = correctedScore;
+    }
+
+    // Re-balance forward speed and vertical angle after lateral correction.
+    // This is important for strong side-spin serves aimed diagonally across
+    // the table: changing Vz also changes Magnus lift and therefore depth.
+    const refinedBaseVx = vx;
+    const refinedBaseVy = vy;
+    const refinedBaseVz = vz;
+    for (let speedStep = -10; speedStep <= 10; speedStep += 1) {
+      const candidateVx = Math.max(3.5, Math.min(11.6, refinedBaseVx + speedStep * 0.16));
+      const candidateVz = refinedBaseVz * candidateVx / Math.max(refinedBaseVx, 0.1);
+      for (let verticalStep = -10; verticalStep <= 10; verticalStep += 1) {
+        const candidateVy = refinedBaseVy + verticalStep * 0.09;
+        const outcome = evaluateServe(
+          { x: originX, y: originY, z: originZ, vx: candidateVx, vy: candidateVy, vz: candidateVz },
+          angularVelocity,
+        );
+        const score = scoreOutcome(outcome, candidateVx);
+        if (score < bestScore) {
+          bestScore = score;
+          vx = candidateVx;
+          vy = candidateVy;
+          vz = candidateVz;
+        }
+      }
+    }
+
+    for (let correction = 0; correction < 2; correction += 1) {
+      const current = evaluateServe(
+        { x: originX, y: originY, z: originZ, vx, vy, vz }, angularVelocity,
+      );
+      if (!current.second) break;
+      const correctedVz = vz + (targetZ - current.second.z) / Math.max(current.second.time, 0.2) * 0.7;
+      const corrected = evaluateServe(
+        { x: originX, y: originY, z: originZ, vx, vy, vz: correctedVz }, angularVelocity,
+      );
+      const correctedScore = scoreOutcome(corrected, vx);
+      if (correctedScore >= bestScore) break;
+      vz = correctedVz;
+      bestScore = correctedScore;
+    }
+
     const predicted = evaluateServe(
       { x: originX, y: originY, z: originZ, vx, vy, vz }, angularVelocity,
     );
@@ -429,6 +555,10 @@ export function solveLaunch(
       speedMps: Math.hypot(vx, vy, vz),
       spinRpm: Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) * spinScale,
       netClearanceMm: (predicted.netY - 0.937) * 1000,
+      serveImpactsMm: predicted.first && predicted.second ? {
+        first: { x: predicted.first.x * 1000, z: predicted.first.z * 1000, timeMs: predicted.first.time * 1000 },
+        second: { x: predicted.second.x * 1000, z: predicted.second.z * 1000, timeMs: predicted.second.time * 1000 },
+      } : undefined,
     };
   }
   let originY = preset.launchHeightMm / 1000;
