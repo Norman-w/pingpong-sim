@@ -104,7 +104,7 @@ function syncWindowIndicators(): void {
     toggle.classList.remove('is-active', 'is-warning');
   }
   const machineToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="machine-window"]');
-  if (machineToggle && (machineRunning || (trackingEnabled && trackingContinuous))) machineToggle.classList.add('is-active');
+  if (machineToggle && (machineRunning || trackingEnabled)) machineToggle.classList.add('is-active');
   const trackingToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="tracking-window"]');
   if (trackingToggle && trackingEnabled) trackingToggle.classList.add('is-active');
   const demoToggle = document.querySelector<HTMLButtonElement>('[data-window-toggle="demo-window"]');
@@ -1287,6 +1287,7 @@ function stopTrackingReplay(): void {
   trackingReplayMesh.visible = false;
   trackingReplayPauseEl.disabled = true;
   trackingReplayPauseEl.textContent = '暂停回放';
+  updateMachineOperatingStatus();
   syncWindowIndicators();
 }
 
@@ -1306,6 +1307,7 @@ function startTrackingReplay(sourceBall: RapierBall): void {
   applyTrackingReplayView();
   trackingReplayPauseEl.disabled = false;
   trackingReplayPauseEl.textContent = '暂停回放';
+  updateMachineOperatingStatus();
   syncWindowIndicators();
 }
 
@@ -1385,7 +1387,23 @@ function updateTrackingControlState(): void {
   trackingStartEl.classList.toggle('active', trackingEnabled);
   trackingContinuous = trackingContinuousEl.checked;
   trackingAutoReplay = trackingReplayEl.checked;
+  updateMachineOperatingStatus();
   syncWindowIndicators();
+}
+
+function updateMachineOperatingStatus(): void {
+  let text = '已停止';
+  if (machineRunning) {
+    text = '独立连续运行';
+  } else if (trackingEnabled) {
+    if (trackingReplayMode) text = '跟球联动 · 慢放';
+    else if (trackingContinuous) text = '跟球联动 · 连续';
+    else if (trackingSession) text = '跟球联动 · 单球';
+    else text = '跟球联动 · 已完成';
+  }
+  machineStatusEl.textContent = text;
+  machineStatusEl.classList.toggle('running', machineRunning);
+  machineStatusEl.classList.toggle('linked', !machineRunning && trackingEnabled);
 }
 
 function stopTrackingDemo(resetStatus = true): void {
@@ -1699,8 +1717,7 @@ function setMachineRunning(running: boolean): void {
   nextMachineShotAt = performance.now();
   machineToggleEl.classList.toggle('active', running);
   machineToggleEl.textContent = running ? '暂停连续 [P]' : '连续发球 [P]';
-  machineStatusEl.textContent = running ? '运行中' : '已停止';
-  machineStatusEl.classList.toggle('running', running);
+  updateMachineOperatingStatus();
   syncWindowIndicators();
 }
 
