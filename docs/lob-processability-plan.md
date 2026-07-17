@@ -21,7 +21,7 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 1. **可处理能力**：落台后沿弹起弧采样，输出 `processability ∈ [0,1]`（够球 × 下落预判难度 × 规则合法）。
 2. **可处理技术集合**：每点给出允许的 `ContactTechnique[]`。
 3. **接球方差异**：儿童/近网上升窗口常坍塌 → 默认偏向下降窗口；成人可偏向上升下压。
-4. **UI（优先）**：窗口 A 错过时复用现有 `#receive-failure-flash` 边缘变红受击效果（`showReceiveFailure`），文案点名「错过第一合理处理点」；青色标记仍只标一个当前首选点（常为窗口 B）。轨迹色带可第二期再加。
+4. **UI（优先）**：窗口 A 错过时边缘变红 + 青色首选立刻切到窗口 B + 原窗口 A 位置留下「错过首选点」网格球。轨迹色带可第二期再加。
 
 ### 错过指示形态（已校准：D）
 
@@ -109,11 +109,21 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 - 下降：`vy` 越负惩罚越大
 - 未落台 / 二次落台：分为 0
 
+### 闪红后的标记行为（已校准）
+
+窗口 A 错过触发的同一帧（或紧随其后）：
+
+1. **`showReceiveFailure(...)`** 边缘变红一次  
+2. **青色首选点**（`contactGuideMarker`，现有 wireframe 规格）**立刻切到窗口 B** 上仿真仍可达的点  
+3. **在原窗口 A 首选位置**新增同规格网格球标记（`SphereGeometry(28, 16, 12)` + wireframe，与 `contactGuideMarker` / `actualContactMarker` 同规格），表示「错过首选点」  
+   - 建议色：琥珀/暗红（区别于青色建议、绿色实触），如 `0xff6b4a`  
+   - 命名示意：`missedPreferredMarker`  
+   - 可见直到本球跟踪结束 / 下一球开始时清除
+
 ## 接入
 
-1. lob 跟踪：落台后维护窗口 A 状态机；结束且未触球 → `showReceiveFailure`
-2. 首选点：窗口 A 错过/不可达后，青色标记切到窗口 B 上仿真仍可达的点
-3. 技术集 / 色带：可第二期；第一期以红边指示为主
+1. lob 跟踪：落台后维护窗口 A 状态机；结束且未触球 → 闪红 + 钉住错过标记 + 青点切 B  
+2. 技术集 / 色带：可第二期；第一期以红边 + 双标记为主
 
 ## 刻意不做（第一期）
 
