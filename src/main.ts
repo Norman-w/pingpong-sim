@@ -21,6 +21,12 @@ import {
   type TargetLane,
 } from './serveMachine';
 import { buildReplayCuePoints, listReplayCueRecipe, type ReplayCuePoint } from './replayCuePoints';
+import {
+  captureQuickViewBase,
+  clearQuickViewBase,
+  restoreQuickViewBase,
+  updateHighArcFraming,
+} from './highArcFraming';
 
 createIcons({ icons: { MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus, Play } });
 
@@ -334,6 +340,10 @@ const QUICK_VIEWS: Record<Exclude<QuickViewId, 'follow'>, { position: [number, n
 };
 let activeQuickView: QuickViewId = 'follow';
 
+function hasLockedQuickView(): boolean {
+  return activeQuickView !== 'follow';
+}
+
 function setQuickViewActive(id: QuickViewId): void {
   activeQuickView = id;
   document.querySelectorAll<HTMLButtonElement>('[data-quick-view]').forEach(button => {
@@ -342,9 +352,14 @@ function setQuickViewActive(id: QuickViewId): void {
 }
 
 function applyViewPreset(): void {
+  clearQuickViewBase(camera, controls);
   const stance = effectiveStancePose();
   camera.position.set(stance.x, viewHeightMm, stance.z);
   controls.target.set(TABLE_CENTER_X, TABLE_TOP_Y + 180, TABLE_CENTER_Z);
+  if (Math.abs(camera.fov - 45) > 1e-3) {
+    camera.fov = 45;
+    camera.updateProjectionMatrix();
+  }
   controls.update();
   setQuickViewActive('follow');
   document.querySelectorAll<HTMLButtonElement>('[data-view-height]').forEach(button => {
@@ -355,6 +370,25 @@ function applyViewPreset(): void {
     button.disabled = stanceMode === 'auto';
   });
   updateStanceDisplay();
+}
+
+function applyDemoObserverSetup(scenario?: {
+  eyeHeightMm: number;
+  stance: ViewStance;
+}): void {
+  // Topic demos always start in auto footwork; the user can still switch to fixed.
+  stanceMode = 'auto';
+  persistStanceMode();
+  if (scenario) {
+    viewHeightMm = scenario.eyeHeightMm;
+    viewStance = scenario.stance;
+  }
+  // Locked quick views keep the chosen camera; only refresh stance UI.
+  if (hasLockedQuickView()) {
+    updateStanceDisplay();
+    return;
+  }
+  applyViewPreset();
 }
 
 function applyQuickView(id: QuickViewId): void {
@@ -368,10 +402,13 @@ function applyQuickView(id: QuickViewId): void {
     return;
   }
   const preset = QUICK_VIEWS[id];
+  camera.fov = 45;
+  camera.updateProjectionMatrix();
   camera.position.set(...preset.position);
   controls.target.set(...preset.target);
   controls.enabled = true;
   controls.update();
+  captureQuickViewBase(camera, controls, 45);
   setQuickViewActive(id);
   document.getElementById('tracking-status')!.innerHTML =
     `<strong>${preset.label}</strong>：观察球台整体空间关系；物理模拟仍按正常时间推进。`;
@@ -653,11 +690,13 @@ const CONTACT_TECHNIQUES: Record<ContactTechnique, ContactTechniqueSpec> = {
   'forehand-flick': { label: '正手挑打', forwardMm: 535, lateralMm: -420, aboveTableMm: 155, timing: '上升后段至最高点', description: '上步进入台内，以前臂和手腕向前上方加速处理短球。', tableContactX: 2290 },
   'backhand-flick': { label: '反手拧拉', forwardMm: 510, lateralMm: -30, aboveTableMm: 165, timing: '上升后段', description: '肘部前置、手腕绕球侧面摩擦，主动处理短下旋或侧下旋。', tableContactX: 2290 },
   chop: { label: '削球', forwardMm: 420, lateralMm: -600, aboveTableMm: 150, timing: '下降期', description: '身体侧前方较低位置触球，为向下、向前的长挥拍留出空间。' },
-  smash: { label: '扣杀', forwardMm: 430, lateralMm: -420, aboveTableMm: 430, timing: '最高点至下降初段', description: '针对明显高球用较厚碰撞向前下方加速，优先保证落点和连续。' },
+  smash: { label: '扣杀', forwardMm: 560, lateralMm: -280, aboveTableMm: 300, timing: '落台后最高点附近或下降初段', description: '高吊球须先落接球方台面；在弹起后的高点附近向下扣杀，未落台击打属于拦击犯规。' },
   lob: { label: '放高球', forwardMm: 300, lateralMm: -350, aboveTableMm: 180, timing: '下降期低点', description: '远台被动时向前上方摩擦并抬高弧线，以深落点争取回位时间。' },
 };
 let contactTechnique: ContactTechnique = 'forehand-loop';
 const TABLE_TECHNIQUES = new Set<ContactTechnique>(['push', 'drop-shot', 'long-push', 'lift', 'forehand-flick', 'backhand-flick']);
+// Smash is taken after the receive-side bounce; volleying a lob is illegal.
+const BOUNCE_REQUIRED_TECHNIQUES = new Set<ContactTechnique>([...TABLE_TECHNIQUES, 'smash']);
 const TABLE_CONTACT_AFTER_BOUNCE_MM: Record<ContactTechnique, number> = {
   'forehand-loop': 0,
   'forehand-drive': 0,
@@ -731,7 +770,9 @@ function autoStanceDepth(technique: ContactTechnique): { x: number; label: strin
   if (technique === 'block' || technique === 'punch' || technique === 'forehand-drive') return { x: 3150, label: '近台' };
   if (technique === 'chop') return { x: 4250, label: '远台削球' };
   if (technique === 'lob') return { x: 4500, label: '远台防守' };
-  if (technique === 'smash') return { x: 3400, label: '中近台进攻' };
+  // After a lob bounce near mid-depth, stand just behind the end line and
+  // reach forward to the post-bounce apex / early descent.
+  if (technique === 'smash') return { x: 2880, label: '中近台进攻' };
   return { x: 3600, label: '中台进攻' };
 }
 
@@ -778,6 +819,9 @@ function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, ta
   const spec = CONTACT_TECHNIQUES[contactTechnique];
   const receiver = currentReceiverProfile();
   const receiveBounceCount = requiredReceiveBounceCount();
+  if (BOUNCE_REQUIRED_TECHNIQUES.has(contactTechnique) && tableImpacts < receiveBounceCount) {
+    return '来球尚未在接球方台面落台，空中直接拦截属违例';
+  }
   if (TABLE_TECHNIQUES.has(contactTechnique) && tableImpacts > receiveBounceCount) {
     return '错过接球方落台后、下一跳前的台内击球时机';
   }
@@ -865,6 +909,10 @@ function availableTechniquesForPreset(preset: ShotPreset): ContactTechnique[] {
   if (preset.id === 'lob') return ['smash', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot'];
   if (preset.id === 'smash') return ['block', 'chop', 'lob'];
   return ['forehand-drive', 'punch', 'forehand-loop', 'backhand-loop', 'block', 'counter-loop', 'chop'];
+}
+
+function preferTechniqueForPreset(preset: ShotPreset): ContactTechnique {
+  return availableTechniquesForPreset(preset)[0];
 }
 
 function updateTechniqueOptions(): void {
@@ -1278,6 +1326,14 @@ function selectedReplayViews(): QuickViewId[] {
   return selected.length > 0 ? selected : ['follow'];
 }
 
+function enableTopicDemoSlowReplay(): void {
+  document.querySelectorAll<HTMLInputElement>('[data-replay-view]').forEach(input => {
+    input.checked = true;
+  });
+  trackingReplayEl.checked = true;
+  trackingAutoReplay = true;
+}
+
 function replayViewLabel(view: QuickViewId): string {
   return view === 'follow' ? '跟球视角' : QUICK_VIEWS[view].label;
 }
@@ -1289,8 +1345,11 @@ function applyTrackingReplayView(): void {
     controls.target.copy(trackingReplayMesh.position);
   } else {
     const preset = QUICK_VIEWS[view];
+    camera.fov = 45;
+    camera.updateProjectionMatrix();
     camera.position.set(...preset.position);
     controls.target.set(...preset.target);
+    captureQuickViewBase(camera, controls, 45);
     setQuickViewActive(view);
   }
   controls.enabled = true;
@@ -1514,6 +1573,7 @@ function stopTrackingReplay(): void {
   trackingReplayMesh.visible = false;
   trackingReplayActiveCueId = null;
   hideSpinBillboard();
+  if (hasLockedQuickView()) restoreQuickViewBase(camera, controls);
   updateReplayControlButtons();
   refreshReplayCuePointsUi();
   updateMachineOperatingStatus();
@@ -1592,6 +1652,14 @@ function updateTrackingReplay(deltaSeconds: number): void {
     const pausedFrame = sampleTrackingReplayFrame(trackingReplayTime);
     advanceTrackingReplaySpin(pausedFrame.angularVelocity, deltaSeconds);
     if (activeQuickView === 'follow') controls.target.copy(trackingReplayMesh.position);
+    else {
+      updateHighArcFraming({
+        camera,
+        controls,
+        ballMm: trackingReplayMesh.position,
+        deltaSeconds,
+      });
+    }
     return;
   }
   trackingReplayTime += deltaSeconds * trackingSpeed;
@@ -1604,9 +1672,16 @@ function updateTrackingReplay(deltaSeconds: number): void {
   syncReplayCueHighlightForTime(trackingReplayTime);
   if (activeQuickView === 'follow') {
     // Keep the replay ball in the observer's gaze with frame-rate-independent
-    // smoothing. Third-person quick views deliberately remain untouched.
+    // smoothing. Locked quick views keep identity and only adjust framing for high arcs.
     const followAlpha = 1 - Math.exp(-12 * deltaSeconds);
     controls.target.lerp(trackingReplayMesh.position, followAlpha);
+  } else {
+    updateHighArcFraming({
+      camera,
+      controls,
+      ballMm: trackingReplayMesh.position,
+      deltaSeconds,
+    });
   }
   if (ended) {
     if (trackingReplayViewIndex + 1 < trackingReplayViews.length) {
@@ -1682,6 +1757,7 @@ function stopTrackingDemo(resetStatus = true): void {
   trackingTrailLine.geometry.dispose();
   trackingTrailLine.geometry = new THREE.BufferGeometry();
   trackingTrailPoints = [];
+  if (hasLockedQuickView()) restoreQuickViewBase(camera, controls);
   if (resetStatus) updateContactGuide(false);
   updateTrackingControlState();
 }
@@ -1722,7 +1798,8 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
     closestDistance: Number.POSITIVE_INFINITY,
     contactFailed: false,
   };
-  controls.enabled = false;
+  const lockedView = hasLockedQuickView();
+  controls.enabled = lockedView;
   trackingTrailPoints = [initialPosition.clone()];
   trackingTrailLine.geometry.dispose();
   trackingTrailLine.geometry = new THREE.BufferGeometry().setFromPoints(trackingTrailPoints);
@@ -1734,7 +1811,8 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
   // Only the first ball establishes the initial eye target. During continuous
   // tracking, keep the previous contact target and let the normal camera
   // interpolation acquire the next ball without a sudden viewpoint jump.
-  if (snapCamera) controls.target.copy(trackingTarget);
+  // Locked quick views keep their chosen camera and are not snapped onto the ball.
+  if (snapCamera && !lockedView) controls.target.copy(trackingTarget);
   const initialGuide = contactGuidePosition();
   const initialFailure = contactFailureReason(initialGuide, initialGuide, requiredReceiveBounceCount(), 1);
   setContactGuideState(initialFailure ? 'unreachable' : 'hittable');
@@ -1747,7 +1825,8 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
 function launchNextTrackingBall(restoreFollowView = false): void {
   if (!trackingEnabled) return;
   resetAutomaticStance();
-  if (restoreFollowView) applyViewPreset();
+  const useFollowCamera = restoreFollowView && !hasLockedQuickView();
+  if (useFollowCamera) applyViewPreset();
   updateContactGuide(true);
   const ball = feedMachine(activePreset, true);
   if (!ball) {
@@ -1758,7 +1837,7 @@ function launchNextTrackingBall(restoreFollowView = false): void {
   // The replay clock must start after the ball actually exists, otherwise
   // solver time becomes a fake stationary segment at the beginning.
   const launchedAt = performance.now();
-  beginTrackingBall(ball, launchedAt, restoreFollowView, !restoreFollowView);
+  beginTrackingBall(ball, launchedAt, useFollowCamera, !restoreFollowView);
   trackingNextShotAt = launchedAt + 1000 / readMachineSettings().cadence;
 }
 
@@ -1771,7 +1850,7 @@ async function startTrackingDemo(): Promise<void> {
   trackingAutoReplay = trackingReplayEl.checked;
   trackingQueue.length = 0;
   resetAutomaticStance();
-  applyViewPreset();
+  if (!hasLockedQuickView()) applyViewPreset();
   // A tracking demo follows exactly what the machine is configured to throw:
   // no hidden preset, lane, or randomization override. If the selected stance
   // cannot handle that ball, the demo must expose the miss instead of adapting
@@ -1835,10 +1914,9 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   let trajectoryGuide = guide;
   let secondsToGuide = 0;
   let hasTrajectoryProjection = false;
-  // Once the ball has bounced, project the elite body-relative contact plane
-  // onto the current physical flight path. The cyan marker therefore sits on
-  // the actual arc instead of floating at an unrelated fixed height.
-  if (session.ball.tableImpacts >= receiveBounceCount && velocity.x > 0.05 && position.x * 1000 < guide.x) {
+  // After the legal receive-side bounce, project the contact plane onto the
+  // real arc so the cyan marker sits on the post-bounce rise / early descent.
+  if (session.ball.tableImpacts >= receiveBounceCount && velocity.x > 0.05 && ballPoint.x < guide.x) {
     const timeToPlane = (guide.x / 1000 - position.x) / velocity.x;
     const projected = new THREE.Vector3(
       guide.x,
@@ -1898,7 +1976,9 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     }
   } else if (session.phase === 'follow-contact') {
     trackingTarget.copy(ballPoint);
-    const hasRequiredBounce = !TABLE_TECHNIQUES.has(contactTechnique) || session.ball.tableImpacts >= receiveBounceCount;
+    const hasRequiredBounce =
+      !BOUNCE_REQUIRED_TECHNIQUES.has(contactTechnique) ||
+      session.ball.tableImpacts >= receiveBounceCount;
     if (position.x * 1000 >= guide.x && hasRequiredBounce) {
       session.phase = 'contact-hold';
       session.phaseStartedAt = now;
@@ -1964,6 +2044,15 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   }
 
   session.previousVy = velocity.y;
+  if (hasLockedQuickView()) {
+    updateHighArcFraming({
+      camera,
+      controls,
+      ballMm: ballPoint,
+      deltaSeconds,
+    });
+    return;
+  }
   if (session.phase === 'post-contact-source') {
     turnViewAtHumanSpeed(trackingTarget, deltaSeconds);
   } else {
@@ -2099,7 +2188,6 @@ type DemoVariant = 'child-lob-adult' | 'child-triangle-adult' | 'stance-high';
 interface DemoScenario {
   presetId: string;
   eyeHeightMm: number;
-  stanceMode: StanceMode;
   stance: ViewStance;
   lane: TargetLane;
   technique: ContactTechnique;
@@ -2109,15 +2197,15 @@ interface DemoScenario {
 }
 const DEMO_SCENARIOS: Record<Exclude<DemoId, 'topspin'>, DemoScenario> = {
   'child-lob': {
-    presetId: 'lob', eyeHeightMm: 950, stanceMode: 'fixed', stance: 'far', lane: 'middle',
+    presetId: 'lob', eyeHeightMm: 950, stance: 'far', lane: 'middle',
     technique: 'smash', strength: 100, playerLevel: 'club', receiverLevel: 'club',
   },
   'child-triangle': {
-    presetId: 'float-short', eyeHeightMm: 950, stanceMode: 'fixed', stance: 'near', lane: 'forehand',
+    presetId: 'float-short', eyeHeightMm: 950, stance: 'near', lane: 'forehand',
     technique: 'drop-shot', strength: 100, playerLevel: 'club', receiverLevel: 'club',
   },
   'low-stance': {
-    presetId: 'loop-fast', eyeHeightMm: 1350, stanceMode: 'auto', stance: 'near', lane: 'middle',
+    presetId: 'loop-fast', eyeHeightMm: 1350, stance: 'near', lane: 'middle',
     technique: 'block', strength: 92, playerLevel: 'advanced', receiverLevel: 'club',
   },
 };
@@ -2167,18 +2255,14 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   laneEl.value = scenario.lane;
   randomizeEl.checked = false;
   trackingContinuousEl.checked = false;
-  trackingReplayEl.checked = false;
-  viewHeightMm = scenario.eyeHeightMm;
-  viewStance = scenario.stance;
-  stanceMode = scenario.stanceMode;
-  persistStanceMode();
+  enableTopicDemoSlowReplay();
   setActivePreset(getPreset(scenario.presetId), false);
-  contactTechnique = scenario.technique;
+  contactTechnique = preferTechniqueForPreset(activePreset);
   updateTechniqueOptions();
   syncAllFlatChoices();
   updateReceiverLevelDisplay();
   updateMachineDetails();
-  applyViewPreset();
+  applyDemoObserverSetup(scenario);
   updateContactGuide(false);
 
   await startTrackingDemo();
@@ -2239,16 +2323,19 @@ function updateDemo(): void {
 }
 
 function attachDemoBallToTracking(ball: RapierBall): void {
+  // Same tracking state machine as machine presets: launch glance → contact →
+  // slow replay through every selected view. The grey no-spin ball is only a baseline.
+  stopTrackingDemo(false);
+  setMachineRunning(false);
   trackingEnabled = true;
   trackingContinuous = false;
-  trackingAutoReplay = false;
   trackingContinuousEl.checked = false;
-  trackingReplayEl.checked = false;
+  enableTopicDemoSlowReplay();
   trackingQueue.length = 0;
   resetAutomaticStance();
-  applyViewPreset();
+  if (!hasLockedQuickView()) applyViewPreset();
   updateContactGuide(true);
-  beginTrackingBall(ball, performance.now(), true, true);
+  beginTrackingBall(ball, performance.now(), !hasLockedQuickView(), false);
   setWindowOpen('tracking-window', true);
   updateTrackingControlState();
 }
@@ -2258,12 +2345,12 @@ async function fireDemo(): Promise<void> {
   await clearBalls();
   setMachineRunning(false);
   setActivePreset(getPreset('loop-spin'), false);
-  contactTechnique = 'block';
+  contactTechnique = preferTechniqueForPreset(activePreset);
   updateTechniqueOptions();
-  viewHeightMm = 1600;
-  viewStance = 'mid';
-  stanceMode = 'fixed';
-  persistStanceMode();
+  applyDemoObserverSetup({
+    eyeHeightMm: 1600,
+    stance: 'mid',
+  });
   demoActive = true;
   setMachineVisible(false);
   updateDemo();
@@ -2272,6 +2359,7 @@ async function fireDemo(): Promise<void> {
     const zOffset = i === 0 ? -45 : 45;
     const ball = spawnPhysicsBall(solution.originMm.x, solution.originMm.y, solution.originMm.z + zOffset, solution.velocityMm.x, solution.velocityMm.y, solution.velocityMm.z, i === 0 ? 0xb8c0cc : 0xff5d73);
     ball?.body.setAngvel(solution.angularVelocity, true);
+    // Follow the spun ball — the more realistic incoming path for the topic.
     if (i === 1) trackedBall = ball;
   });
   if (trackedBall) attachDemoBallToTracking(trackedBall);
