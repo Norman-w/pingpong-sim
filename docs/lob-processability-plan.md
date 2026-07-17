@@ -48,38 +48,57 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 取**较早发生**的那个：
 
 1. **过最高点**：`vy` 由正转负（上升段结束）
-2. **仍上升但已够不着**：`y > jumpContactYMm`（对该接球方起跳够球高之上）
+2. **仍上升但仿真已判定够不着**：见下方「够球仿真」——不是单独看一个高度阈值
 
 任一为真 → 窗口 A 对该接球方结束；若窗口内未形成合法可处理触球 → 触发边缘变红。
 
+### 够球仿真（已校准：大人小孩同一套）
+
+「真正没够到」**不靠儿童特判**，而是复用/扩展跟球里已有的自动位移逻辑，对所有 `receiverLevel` 一视同仁：
+
+现有锚点（`src/main.ts`）：
+
+- `moveAutomaticStanceForBall`：自动左右/前后位移（受 `moveSpeedMmPerSec`）
+- `contactFailureReason`：横向 `lateralReachMm`、到位余量 `reachAllowanceMm`、剩余时间能否赶到
+
+第一期要补上的约束：
+
+- **伸入台面幅度**：以当前占位（stance）为原点，可触区近似**朝台内的扇形**（前后伸拍 + 左右张开），不是无限往台心探
+- 近网高吊时，球在台内很靠前 → 即便左右速度够，也可能因扇形深度不够而判「够不着」
+- 竖直够球（站立/起跳高）与扇形水平可达、步法能否在超时前到位，**三者同时满足**才算窗口 A 内可处理
+
+判定结果：
+
+- 仿真显示窗口 A 内全程不可达，或曾可达但未在窗口内形成触球 → 窗口 A 结束时闪红（「错过第一合理处理点」）
+- 大人同样走这套仿真；差异只来自参数（步速、扇形半径/张角、够球高），不是两套规则
+
 ## 领域模块
 
-新增 `src/lobProcessability.ts`：
+新增 `src/lobProcessability.ts`（扇形与打分）+ 在跟踪循环调用：
 
-- `ArcPhase`: rise-early | rise | apex | fall | fall-late
-- `ProcessabilitySample`: 位置/速度/phase/reachOk/processability/techniques
-- `ReceiverReachModel`: maxContactYMm / jumpContactYMm / reactionMs  
-  第一期由 `receiverLevel` + `viewHeightMm` 推导，不新增滑条
+- `ArcPhase` / `ProcessabilitySample`
+- `ReceiverReachModel`：步速、反应、`maxContactYMm` / `jumpContactYMm`、**台内扇形**（`tableReachDepthMm`、`reachFanHalfAngleRad` 或等价）
+- `canReachSample(stancePose, ballPoint, receiver, remainingSeconds)`：位移能否跟上 + 点是否在扇形内 + 高度是否在够球高内
 
 打分启发式：
 
-- 上升下压：须高于球网且 `y <= jumpContactY`
-- 下降处理：`y <= maxContactY`；`vy` 越负惩罚越大（越低越难碰到）
-- 未落台 / 二次落台：分为 0，技术集为空
+- `reachOk = canReachSample(...)`（大人小孩同一函数）
+- 下降：`vy` 越负惩罚越大
+- 未落台 / 二次落台：分为 0
 
 ## 接入
 
-1. 跟踪循环：`activePreset.id === 'lob'` 且已落台 → 采样缓存
-2. `preferProcessabilitySample` → 驱动青色首选点（儿童下降峰 / 成人上升峰）
-3. `availableTechniquesForPreset('lob')` / `updateTechniqueOptions` 读窗口技术集
-4. 轨迹按 processability 着色 + 状态栏一行文案
+1. lob 跟踪：落台后维护窗口 A 状态机；结束且未触球 → `showReceiveFailure`
+2. 首选点：窗口 A 错过/不可达后，青色标记切到窗口 B 上仿真仍可达的点
+3. 技术集 / 色带：可第二期；第一期以红边指示为主
 
 ## 刻意不做（第一期）
 
-- 非 lob 球路、改 bounce 规则、完整儿童人体/挥拍仿真、多点实战触球
+- 非 lob、改 bounce 规则、完整人体关节/挥拍力矩、多点实战触球
 
 ## 验证
 
-- 成人高吊：上升窗口有扣杀类，首选偏上升
-- beginner 近网：上升≈0，下降有分且随高度降低；首选偏下降够得着处
+- beginner 近网高吊：仿真够不着窗口 A → 越过结束条件时边缘变红一次
+- club/成人同球：若仿真跟得上窗口 A → 不误闪红
+- 固定身位 vs 自动位移两种 stance 都要用同一套「扇形+步法」语义（固定时位移项为 0，只判扇形与高度）
 - `npx tsc --noEmit` 通过
