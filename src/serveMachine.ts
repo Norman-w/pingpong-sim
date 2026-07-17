@@ -4,12 +4,20 @@ export type PlayerLevel = 'beginner' | 'club' | 'advanced' | 'world';
 export type BallStyle = 'white' | 'yellow' | 'white-yellow-split' | 'white-yellow-eight' | 'rainbow';
 
 export const PLAYER_LEVELS: Record<PlayerLevel, {
-  label: string; speedScale: number; spinScale: number; reference: string;
+  label: string;
+  speedScale: number;
+  spinScale: number;
+  accuracyScale: number;
+  speedVariation: number;
+  spinVariation: number;
+  executionNoiseMps: number;
+  missRate: number;
+  reference: string;
 }> = {
-  beginner: { label: '业余入门', speedScale: 0.72, spinScale: 0.48, reference: '动作建立期：重控制，速度与旋转均保守。' },
-  club: { label: '业余俱乐部', speedScale: 0.88, spinScale: 0.72, reference: '稳定对练与比赛常见强度。' },
-  advanced: { label: '专业训练', speedScale: 1, spinScale: 1, reference: '以系统训练球速/转速为预设基准。' },
-  world: { label: '世界级参考', speedScale: 1.16, spinScale: 1.24, reference: '高水平上限参考；并非每一球都达到极限。' },
+  beginner: { label: '业余入门', speedScale: 0.72, spinScale: 0.48, accuracyScale: 1.9, speedVariation: 0.07, spinVariation: 0.14, executionNoiseMps: 0.16, missRate: 0.08, reference: '动作建立期：弧线偏保守，落点和出球质量波动较大。' },
+  club: { label: '业余俱乐部', speedScale: 0.88, spinScale: 0.72, accuracyScale: 1.35, speedVariation: 0.045, spinVariation: 0.09, executionNoiseMps: 0.10, missRate: 0.035, reference: '稳定对练与比赛强度，仍保留可见的落点和质量波动。' },
+  advanced: { label: '专业训练', speedScale: 1, spinScale: 1, accuracyScale: 1, speedVariation: 0.025, spinVariation: 0.05, executionNoiseMps: 0.055, missRate: 0.012, reference: '系统训练基准：弧线主动、落点集中、连续质量较稳定。' },
+  world: { label: '世界级参考', speedScale: 1.16, spinScale: 1.24, accuracyScale: 0.65, speedVariation: 0.015, spinVariation: 0.03, executionNoiseMps: 0.03, missRate: 0.003, reference: '高水平上限参考：弧线更低更主动，落点和出球质量高度稳定。' },
 };
 
 export interface ShotPreset {
@@ -73,6 +81,17 @@ export interface MachineSettings {
   targetLane: TargetLane;
   randomize: boolean;
   playerLevel: PlayerLevel;
+  random?: () => number;
+}
+
+export type ShotOutcome = 'in' | 'net' | 'long' | 'wide' | 'serve-fault';
+export interface LaunchQuality {
+  outcome: ShotOutcome;
+  intendedTargetMm: { x: number; z: number };
+  actualLandingMm?: { x: number; z: number };
+  landingErrorMm?: number;
+  expectedSpreadMm: number;
+  missRate: number;
 }
 
 export interface LaunchSolution {
@@ -83,6 +102,7 @@ export interface LaunchSolution {
   speedMps: number;
   spinRpm: number;
   netClearanceMm: number;
+  quality?: LaunchQuality;
   serveImpactsMm?: {
     first: { x: number; z: number; timeMs: number };
     second: { x: number; z: number; timeMs: number };
@@ -275,14 +295,7 @@ const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
 const TABLE_CONTACT_Y = 0.805;
 const NET_X = 1.370;
-const NET_CLEAR_Y = 0.988;
 const RPM_TO_RAD = 2 * Math.PI / 60;
-
-// The nozzle is a 180 mm cylinder centred 175 mm in front of the head
-// centre.  With the head at x=-240 mm, its front face is x=25 mm.  Spawn the
-// ball centre one radius beyond that face so it starts just outside the mouth
-// instead of inside the housing or beside the nozzle.
-const MACHINE_BALL_ORIGIN_X = 0.045;
 
 const laneZ: Record<Exclude<TargetLane, 'random'>, number> = {
   // The receiver is at +X and faces -X: a right-handed forehand is on -Z.
@@ -290,6 +303,25 @@ const laneZ: Record<Exclude<TargetLane, 'random'>, number> = {
   middle: -0.7625,
   backhand: -0.25,
 };
+
+function rallySourcePosition(preset: ShotPreset): { x: number; z: number } {
+  const far = ['chop', 'back-heavy', 'back-extreme', 'long-pips-chop'].includes(preset.id);
+  const mid = ['loop-spin', 'loop-fast', 'top-extreme', 'smash'].includes(preset.id);
+  const close = ['float-short', 'push', 'back-light', 'long-pips-chop-block', 'anti-dead-block'].includes(preset.id);
+  const x = preset.id === 'lob' ? -0.85 : far ? -0.35 : mid ? -0.22 : close ? 0.02 : -0.10;
+
+  let z = -0.7625;
+  if (['drive', 'top-drive', 'loop-spin', 'loop-fast', 'smash', 'chop', 'back-heavy', 'top-extreme', 'back-extreme'].includes(preset.id)) {
+    z = -1.00;
+  } else if (['short-pips-hit', 'short-pips-block', 'medium-pips-sink', 'long-pips-chop-block', 'anti-dead-block'].includes(preset.id)) {
+    z = -0.43;
+  } else if (preset.id.includes('right')) {
+    z = -0.40;
+  } else if (preset.id.includes('left')) {
+    z = -1.12;
+  }
+  return { x, z };
+}
 
 interface SimState { x: number; y: number; z: number; vx: number; vy: number; vz: number; }
 interface SimResult { state: SimState; time: number; netY: number; }
@@ -396,11 +428,174 @@ function evaluateServe(
   return { first: hits[0], second: hits[1], netY };
 }
 
-function randomTargetZ(settings: MachineSettings, spreadMm: number): number {
+function evaluateRally(
+  origin: SimState,
+  angularVelocity: { x: number; y: number; z: number },
+): { impact?: { x: number; z: number }; netY: number } {
+  const state = { ...origin };
+  let netY = origin.y;
+  let sawNet = false;
+  const dt = 1 / 480;
+  for (let t = 0; t < 2 && state.x < 4.2 && state.y > 0; t += dt) {
+    const previousY = state.y;
+    advanceSimulation(state, angularVelocity, dt);
+    if (!sawNet && state.x >= NET_X) {
+      netY = state.y;
+      sawNet = true;
+    }
+    if (state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y && state.x > NET_X) {
+      return { impact: { x: state.x, z: state.z }, netY };
+    }
+  }
+  return { netY };
+}
+
+function centeredNoise(random: () => number): number {
+  // Triangular rather than uniform noise: most strokes stay near the selected
+  // quality, while the level-specific tails still produce visible mistakes.
+  return random() + random() - 1;
+}
+
+function rallyClearanceMm(preset: ShotPreset, level: PlayerLevel): number {
+  const byLevel = (beginner: number, club: number, advanced: number, world: number): number =>
+    ({ beginner, club, advanced, world })[level];
+  if (preset.id === 'lob') return byLevel(390, 370, 350, 330);
+  if (['chop', 'back-heavy', 'back-extreme', 'long-pips-chop'].includes(preset.id)) {
+    return byLevel(250, 220, 190, 165);
+  }
+  if (['drive', 'top-drive', 'short-pips-hit', 'short-pips-block', 'medium-pips-sink', 'smash'].includes(preset.id)) {
+    return byLevel(115, 82, 55, 35);
+  }
+  if (preset.id === 'loop-fast') return byLevel(155, 120, 88, 62);
+  if (preset.id === 'loop-spin' || preset.id === 'top-extreme') return byLevel(210, 170, 130, 95);
+  return byLevel(165, 128, 95, 70);
+}
+
+function rallyDepthBiasMm(level: PlayerLevel): number {
+  return ({ beginner: -160, club: -80, advanced: 0, world: 25 })[level];
+}
+
+function serveOriginHeightBiasMm(level: PlayerLevel): number {
+  return ({ beginner: 35, club: 15, advanced: 0, world: -10 })[level];
+}
+
+function serveClearanceMm(profile: ServeProfile, level: PlayerLevel): number {
+  const extra = ({ beginner: 42, club: 27, advanced: 15, world: 7 })[level];
+  return Math.min(profile.maxNetClearanceMm - 3, profile.minNetClearanceMm + extra);
+}
+
+type UncalibratedLaunch = Omit<LaunchSolution, 'quality'>;
+
+function finalizeLaunch(
+  base: UncalibratedLaunch,
+  preset: ShotPreset,
+  settings: MachineSettings,
+  intendedTarget: { x: number; z: number },
+): LaunchSolution {
+  const level = PLAYER_LEVELS[settings.playerLevel] ?? PLAYER_LEVELS.advanced;
+  const random = settings.random ?? Math.random;
+  const velocity = {
+    x: base.velocityMm.x / 1000,
+    y: base.velocityMm.y / 1000,
+    z: base.velocityMm.z / 1000,
+  };
+  const angularVelocity = { ...base.angularVelocity };
+  if (settings.randomize) {
+    const forcedMistake = random() < level.missRate;
+    const mistakeBoost = forcedMistake ? 3.2 : 1;
+    velocity.x *= 1 + centeredNoise(random) * level.speedVariation * mistakeBoost;
+    velocity.y += centeredNoise(random) * level.executionNoiseMps * mistakeBoost;
+    velocity.z += centeredNoise(random) * level.executionNoiseMps * mistakeBoost;
+    if (forcedMistake) {
+      // Rare non-forced errors need to leave the playable envelope, not just
+      // look like another ordinary scatter sample. A lateral timing/contact
+      // error is used because it produces a clear wide serve/return while
+      // preserving the selected stroke's basic speed and spin identity.
+      const direction = random() < 0.5 ? -1 : 1;
+      velocity.z += direction * (preset.mode === 'serve' ? 1.45 : 2.8);
+      velocity.y += (random() < 0.45 ? -1 : 1) * level.executionNoiseMps * 1.4;
+    }
+    const spinFactor = Math.max(0.55, 1 + centeredNoise(random) * level.spinVariation * mistakeBoost);
+    angularVelocity.x *= spinFactor;
+    angularVelocity.y *= spinFactor;
+    angularVelocity.z *= spinFactor;
+  }
+
+  const origin = {
+    x: base.originMm.x / 1000,
+    y: base.originMm.y / 1000,
+    z: base.originMm.z / 1000,
+    vx: velocity.x,
+    vy: velocity.y,
+    vz: velocity.z,
+  };
+  let outcome: ShotOutcome = 'in';
+  let actualLanding: { x: number; z: number } | undefined;
+  let netY = base.netClearanceMm / 1000 + 0.937;
+  let serveImpactsMm = base.serveImpactsMm;
+  if (preset.mode === 'serve') {
+    const result = evaluateServe(origin, angularVelocity);
+    netY = result.netY;
+    if (result.first && result.second) {
+      actualLanding = { x: result.second.x, z: result.second.z };
+      serveImpactsMm = {
+        first: { x: result.first.x * 1000, z: result.first.z * 1000, timeMs: result.first.time * 1000 },
+        second: { x: result.second.x * 1000, z: result.second.z * 1000, timeMs: result.second.time * 1000 },
+      };
+    } else {
+      outcome = 'serve-fault';
+      serveImpactsMm = undefined;
+    }
+  } else {
+    const result = evaluateRally(origin, angularVelocity);
+    netY = result.netY;
+    actualLanding = result.impact;
+    if ((netY - 0.937) * 1000 < 20) outcome = 'net';
+    else if (!actualLanding || actualLanding.x > 2.72) outcome = 'long';
+    else if (actualLanding.z < -1.505 || actualLanding.z > -0.02) outcome = 'wide';
+  }
+
+  const nominalRally = preset.mode === 'serve' ? undefined : evaluateRally({
+    x: base.originMm.x / 1000,
+    y: base.originMm.y / 1000,
+    z: base.originMm.z / 1000,
+    vx: base.velocityMm.x / 1000,
+    vy: base.velocityMm.y / 1000,
+    vz: base.velocityMm.z / 1000,
+  }, base.angularVelocity);
+  const baselineLanding = preset.mode === 'serve' && base.serveImpactsMm
+    ? { x: base.serveImpactsMm.second.x / 1000, z: base.serveImpactsMm.second.z / 1000 }
+    : nominalRally?.impact ?? intendedTarget;
+  const landingErrorMm = actualLanding
+    ? Math.hypot(actualLanding.x - baselineLanding.x, actualLanding.z - baselineLanding.z) * 1000
+    : undefined;
+  return {
+    ...base,
+    velocityMm: { x: velocity.x * 1000, y: velocity.y * 1000, z: velocity.z * 1000 },
+    angularVelocity,
+    targetMm: actualLanding
+      ? { x: actualLanding.x * 1000, y: TABLE_CONTACT_Y * 1000, z: actualLanding.z * 1000 }
+      : base.targetMm,
+    speedMps: Math.hypot(velocity.x, velocity.y, velocity.z),
+    spinRpm: Math.hypot(angularVelocity.x, angularVelocity.y, angularVelocity.z) / RPM_TO_RAD,
+    netClearanceMm: (netY - 0.937) * 1000,
+    serveImpactsMm,
+    quality: {
+      outcome,
+      intendedTargetMm: { x: intendedTarget.x * 1000, z: intendedTarget.z * 1000 },
+      actualLandingMm: actualLanding ? { x: actualLanding.x * 1000, z: actualLanding.z * 1000 } : undefined,
+      landingErrorMm,
+      expectedSpreadMm: preset.spreadMm * level.accuracyScale,
+      missRate: level.missRate,
+    },
+  };
+}
+
+function randomTargetZ(settings: MachineSettings, spreadMm: number, accuracyScale: number, random: () => number): number {
   const base = settings.targetLane === 'random'
-    ? -0.18 - Math.random() * 1.165
+    ? -0.18 - random() * 1.165
     : laneZ[settings.targetLane];
-  const spread = settings.randomize ? (Math.random() - 0.5) * spreadMm / 1000 : 0;
+  const spread = settings.randomize ? centeredNoise(random) * spreadMm * accuracyScale / 1000 : 0;
   return Math.max(-1.45, Math.min(-0.075, base + spread));
 }
 
@@ -410,6 +605,7 @@ export function solveLaunch(
 ): LaunchSolution {
   const strength = Math.max(0.6, Math.min(1.4, settings.strength));
   const level = PLAYER_LEVELS[settings.playerLevel] ?? PLAYER_LEVELS.advanced;
+  const random = settings.random ?? Math.random;
   const speed = preset.speedMps * strength * level.speedScale;
   const spinScale = (0.75 + 0.25 * strength) * level.spinScale;
   const angularVelocity = {
@@ -417,9 +613,9 @@ export function solveLaunch(
     y: preset.sideRpm * spinScale * RPM_TO_RAD,
     z: -preset.topRpm * spinScale * RPM_TO_RAD,
   };
-  let targetX = preset.targetDepthMm / 1000 +
-    (settings.randomize ? (Math.random() - 0.5) * preset.spreadMm / 1500 : 0);
-  let targetZ = randomTargetZ(settings, preset.spreadMm);
+  let targetX = (preset.targetDepthMm + (preset.mode === 'serve' ? 0 : rallyDepthBiasMm(settings.playerLevel))) / 1000 +
+    (settings.randomize ? centeredNoise(random) * preset.spreadMm * level.accuracyScale / 1000 : 0);
+  let targetZ = randomTargetZ(settings, preset.spreadMm, level.accuracyScale, random);
   if (preset.mode === 'serve') {
     // A legal table-tennis serve first descends onto the server's half, then
     // clears the net after the bounce and lands on the receiver's half.
@@ -431,10 +627,18 @@ export function solveLaunch(
     targetX = Math.max(NET_X + 0.12, Math.min(2.65, targetX));
     targetZ = Math.max(-1.43, Math.min(-0.095, targetZ));
     const originX = profile.originXmm / 1000;
-    const originY = preset.launchHeightMm / 1000;
+    const fastServe = preset.id === 'serve-fast-long' || preset.id === 'serve-punch-float';
+    if (fastServe) {
+      targetX += ({ beginner: -0.22, club: -0.10, advanced: 0, world: 0.02 })[settings.playerLevel];
+    }
+    const originY = (preset.launchHeightMm + serveOriginHeightBiasMm(settings.playerLevel)) / 1000;
     const originZ = profile.originZmm / 1000;
     const preferredVx = Math.max(3.8, Math.min(11.2, speed));
-    const firstTargetX = (preset.firstBounceMm ?? 720) / 1000;
+    const desiredClearanceMm = serveClearanceMm(profile, settings.playerLevel);
+    const fastFirstBounceBias = fastServe
+      ? ({ beginner: 140, club: 70, advanced: 0, world: -15 })[settings.playerLevel]
+      : 0;
+    const firstTargetX = ((preset.firstBounceMm ?? 720) + fastFirstBounceBias) / 1000;
     const firstTargetRatio = Math.max(0, Math.min(1, (firstTargetX - originX) / (targetX - originX)));
     const firstTargetZ = originZ + (targetZ - originZ) * firstTargetRatio;
     let vy = -2.2;
@@ -462,10 +666,11 @@ export function solveLaunch(
       if (netClearanceMm > profile.maxNetClearanceMm) {
         score += (netClearanceMm - profile.maxNetClearanceMm) * 0.035;
       }
+      score += Math.abs(netClearanceMm - desiredClearanceMm) * 0.018;
       // For near-end-line first bounces, favour the shortest contact-to-table
       // interval that still satisfies the complete two-bounce route.
       if (firstTargetX < 0.45) score += outcome.first.time * 0.9;
-      score += Math.abs(candidateVx - preferredVx) * 0.025;
+      score += Math.abs(candidateVx - preferredVx) * 0.18;
       return score;
     };
 
@@ -547,7 +752,7 @@ export function solveLaunch(
     const predicted = evaluateServe(
       { x: originX, y: originY, z: originZ, vx, vy, vz }, angularVelocity,
     );
-    return {
+    return finalizeLaunch({
       originMm: { x: originX * 1000, y: originY * 1000, z: originZ * 1000 },
       velocityMm: { x: vx * 1000, y: vy * 1000, z: vz * 1000 },
       angularVelocity,
@@ -559,17 +764,22 @@ export function solveLaunch(
         first: { x: predicted.first.x * 1000, z: predicted.first.z * 1000, timeMs: predicted.first.time * 1000 },
         second: { x: predicted.second.x * 1000, z: predicted.second.z * 1000, timeMs: predicted.second.time * 1000 },
       } : undefined,
-    };
+    }, preset, settings, { x: targetX, z: targetZ });
   }
   let originY = preset.launchHeightMm / 1000;
-  const originX = MACHINE_BALL_ORIGIN_X;
-  const originZ = -0.7625;
+  const source = rallySourcePosition(preset);
+  const stanceNoise = settings.randomize ? centeredNoise(random) * 0.025 * level.accuracyScale : 0;
+  const originX = source.x - Math.abs(stanceNoise) * 0.45;
+  const originZ = Math.max(-1.38, Math.min(-0.145, source.z + stanceNoise));
   let vz = (targetZ - originZ) * speed / Math.max(1, targetX - originX);
   let bestVy = 0;
   let result!: SimResult;
 
-  // Iteratively compensate both aerodynamic drop/lift and lateral Magnus drift.
-  for (let clearanceAttempt = 0; clearanceAttempt < 4; clearanceAttempt += 1) {
+  const desiredNetY = 0.937 + rallyClearanceMm(preset, settings.playerLevel) / 1000;
+  // Iteratively compensate aerodynamic drift while also moving the contact
+  // height toward the level- and stroke-specific net window. This prevents a
+  // generic high safety arc from being imposed on every attacking stroke.
+  for (let clearanceAttempt = 0; clearanceAttempt < 6; clearanceAttempt += 1) {
     for (let lateralAttempt = 0; lateralAttempt < 5; lateralAttempt += 1) {
       const vx = Math.sqrt(Math.max(1, speed * speed - vz * vz));
       let low = -6;
@@ -592,8 +802,9 @@ export function solveLaunch(
       );
       vz += (targetZ - result.state.z) / Math.max(result.time, 0.1) * 0.85;
     }
-    if (result.netY >= NET_CLEAR_Y) break;
-    originY += NET_CLEAR_Y - result.netY + 0.025;
+    const clearanceError = desiredNetY - result.netY;
+    if (Math.abs(clearanceError) < 0.004) break;
+    originY = Math.max(0.90, Math.min(1.75, originY + clearanceError));
   }
 
   const vx = Math.sqrt(Math.max(1, speed * speed - vz * vz));
@@ -603,7 +814,7 @@ export function solveLaunch(
     targetX,
   );
 
-  return {
+  return finalizeLaunch({
     originMm: { x: originX * 1000, y: originY * 1000, z: originZ * 1000 },
     velocityMm: { x: vx * 1000, y: bestVy * 1000, z: vz * 1000 },
     angularVelocity,
@@ -611,7 +822,7 @@ export function solveLaunch(
     speedMps: Math.hypot(vx, bestVy, vz),
     spinRpm: Math.hypot(preset.topRpm, preset.sideRpm, preset.corkRpm) * spinScale,
     netClearanceMm: (result.netY - 0.937) * 1000,
-  };
+  }, preset, settings, { x: targetX, z: targetZ });
 }
 
 export interface SampledTrajectory {

@@ -961,9 +961,10 @@ function updateMachinePose(solution: LaunchSolution): void {
   currentMachineBallOrigin.set(originMm.x, originMm.y, originMm.z);
   machineModel.group.position.set(originMm.x - 45, 0, originMm.z - TABLE_CENTER_Z);
   const horizontalSpeed = Math.hypot(velocityMm.x, velocityMm.z);
+  machineModel.group.rotation.y = -Math.atan2(velocityMm.z, velocityMm.x);
   machineModel.head.rotation.order = 'ZYX';
   machineModel.head.rotation.z = Math.atan2(velocityMm.y, horizontalSpeed);
-  machineModel.head.rotation.y = -Math.atan2(velocityMm.z, velocityMm.x);
+  machineModel.head.rotation.y = 0;
   // The nozzle rotates with the head. Recompute the head centre from the
   // rotated nozzle tip so the visible outlet always touches the physical
   // ball at its true launch position, including high/low attacking arcs.
@@ -972,8 +973,10 @@ function updateMachinePose(solution: LaunchSolution): void {
     .addScaledVector(launchDirection, -BALL_RADIUS);
   const rotatedNozzleOffset = new THREE.Vector3(MACHINE_NOZZLE_TIP_LOCAL_X, 0, 0)
     .applyQuaternion(machineModel.head.quaternion);
-  machineModel.head.position.copy(desiredNozzleTip)
+  const localNozzleTip = desiredNozzleTip.clone()
     .sub(machineModel.group.position)
+    .applyQuaternion(machineModel.group.quaternion.clone().invert());
+  machineModel.head.position.copy(localNozzleTip)
     .sub(rotatedNozzleOffset);
   const lowerY = 970;
   const upperY = machineModel.head.position.y - 90;
@@ -998,6 +1001,20 @@ function updateMachineDetails(solution?: LaunchSolution): void {
     activePreset.sideRpm,
     activePreset.corkRpm,
   ) * spinFactor;
+  const quality = solution?.quality;
+  const outcomeLabel = quality ? ({
+    in: '上台',
+    net: '下网',
+    long: '出端线',
+    wide: '出边线',
+    'serve-fault': '发球失误',
+  } as const)[quality.outcome] : null;
+  const stabilityText = settings.randomize
+    ? `落点散布约 ±${Math.round(activePreset.spreadMm * level.accuracyScale)}mm · 球速波动约 ±${Math.round(level.speedVariation * 100)}% · 旋转波动约 ±${Math.round(level.spinVariation * 100)}% · 非受迫失误参考 ${(level.missRate * 100).toFixed(1)}%`
+    : '质量/落点波动已关闭：显示该水平的固定基准弧线，不施加随机执行误差';
+  const actualQualityText = quality
+    ? `<br>本球结果：<b style="color:${quality.outcome === 'in' ? '#5ee6a8' : '#ff697d'}">${outcomeLabel}</b>${quality.landingErrorMm === undefined ? '' : ` · 相对目标偏差 ${Math.round(quality.landingErrorMm)}mm`}`
+    : '';
   strengthValueEl.textContent = `${Math.round(settings.strength * 100)}%`;
   cadenceValueEl.textContent = `${settings.cadence.toFixed(1)} 球/秒`;
   const clearance = solution ? ` · 过网余量 ${Math.round(solution.netClearanceMm)}mm` : '';
@@ -1007,12 +1024,16 @@ function updateMachineDetails(solution?: LaunchSolution): void {
     ? `<br>双跳路线 <span style="color:#54d6ff">● ${Math.round(predictedFirst?.x ?? activePreset.firstBounceMm ?? 720)}mm</span> → <span style="color:#ffd166">● ${Math.round(predictedSecond?.x ?? activePreset.targetDepthMm)}mm</span>` +
       (solution ? `<br>出手位置：端线后 ${Math.max(0, Math.round(-solution.originMm.x))}mm · 高 ${Math.round(solution.originMm.y)}mm${predictedFirst ? ` · ${Math.round(predictedFirst.timeMs)}ms 后第一跳` : ''}` : '')
     : '';
+  const rallySource = activePreset.mode !== 'serve' && solution
+    ? `<br>动态出球位：${solution.originMm.x < 0 ? `端线后 ${Math.round(-solution.originMm.x)}mm` : `台内 ${Math.round(solution.originMm.x)}mm`} · 横向 ${Math.round(solution.originMm.z - TABLE_CENTER_Z)}mm · 高 ${Math.round(solution.originMm.y)}mm`
+    : '';
   const lengthLabel = knowledge.length === 'short' ? '短球/预计台内二跳' : knowledge.length === 'half-long' ? '半出台球' : '长球/出台球';
   const rubberLabels = knowledge.commonRubbers.map(key => RUBBER_PROFILES[key].label).join('、');
   machineDetailEl.innerHTML =
     `<strong>${activePreset.name}</strong> · ${activePreset.description}<br>` +
     `${knowledge.family} · ${lengthLabel}<br><span style="color:#8fa1b7">常见来源：${rubberLabels}</span><br>` +
-    `${level.label} · 速度 ${shownSpeed.toFixed(1)}m/s (${Math.round(shownSpeed * 3.6)}km/h)${clearance}${serveRoute}` +
+    `${level.label} · 速度 ${shownSpeed.toFixed(1)}m/s (${Math.round(shownSpeed * 3.6)}km/h)${clearance}${serveRoute}${rallySource}` +
+    `<br><span style="color:#8fa1b7">${stabilityText}</span>${actualQualityText}` +
     `<div class="spin-grid">` +
     `<span class="spin-chip">上下旋<b>${signedSpin(activePreset.topRpm * spinFactor, '上旋', '下旋')} rpm</b></span>` +
     `<span class="spin-chip">侧旋<b>${signedSpin(activePreset.sideRpm * spinFactor, '左侧', '右侧')} rpm</b></span>` +
@@ -1038,6 +1059,7 @@ function showParameterDialog(): void {
   document.getElementById('dialog-title')!.textContent = `${activePreset.name} · 参数说明`;
   document.getElementById('dialog-content')!.innerHTML = `
     <p><b>${level.label}</b>：${level.reference}</p>
+    <p>质量范围：落点散布约 ±${Math.round(activePreset.spreadMm * level.accuracyScale)}mm；球速波动约 ±${Math.round(level.speedVariation * 100)}%；旋转波动约 ±${Math.round(level.spinVariation * 100)}%；非受迫失误参考 ${(level.missRate * 100).toFixed(1)}%。关闭“质量/落点波动”可查看无随机波动的基准弧线。</p>
     <h3>球路身份</h3><ul><li>${knowledge.family}</li><li>平动速度：约 ${(activePreset.speedMps * level.speedScale).toFixed(1)} m/s；合成旋转：约 ${rpm} rpm。</li><li>${activePreset.mode === 'serve' ? '合法发球路线：先落发球方台面，再越网落到接球方。' : '多球/回合球：由发球机直接模拟对手击球后的入射球。'}</li></ul>
     <h3>常见胶皮来源</h3><ul>${rubberDetails}</ul>
     <h3>怎样产生</h3><p>${knowledge.production}</p>
@@ -1122,14 +1144,16 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
   });
   updateMachinePose(solution);
   targetMarker.position.set(solution.targetMm.x, TABLE_TOP_Y + 2, solution.targetMm.z);
-  targetMarker.visible = true;
   const isOpeningServe = preset.mode === 'serve';
-  firstBounceMarker.visible = isOpeningServe;
+  targetMarker.visible = !isOpeningServe;
+  firstBounceMarker.visible = false;
   serveTrajectoryLine.visible = isOpeningServe;
   if (isOpeningServe) {
     const sampledServe = sampleTrajectoryDetails(solution, 1.05);
     const firstImpact = sampledServe.tableImpacts[0];
     const secondImpact = sampledServe.tableImpacts[1];
+    firstBounceMarker.visible = Boolean(firstImpact);
+    targetMarker.visible = Boolean(secondImpact);
     if (firstImpact) firstBounceMarker.position.set(firstImpact.x, TABLE_TOP_Y + 3, firstImpact.z);
     if (secondImpact) targetMarker.position.set(secondImpact.x, TABLE_TOP_Y + 2, secondImpact.z);
     serveTrajectoryLine.geometry.dispose();
