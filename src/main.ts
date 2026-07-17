@@ -524,17 +524,41 @@ let machineLandingCount = 0;
 const presetGroupsEl = document.getElementById('preset-groups')!;
 const strengthEl = document.getElementById('machine-strength') as HTMLInputElement;
 const cadenceEl = document.getElementById('machine-cadence') as HTMLInputElement;
-const laneEl = document.getElementById('machine-lane') as HTMLSelectElement;
-const levelEl = document.getElementById('machine-level') as HTMLSelectElement;
-const receiverLevelEl = document.getElementById('receiver-level') as HTMLSelectElement;
+const laneEl = document.getElementById('machine-lane') as HTMLInputElement;
+const levelEl = document.getElementById('machine-level') as HTMLInputElement;
+const receiverLevelEl = document.getElementById('receiver-level') as HTMLInputElement;
 const randomizeEl = document.getElementById('machine-randomize') as HTMLInputElement;
-const ballStyleEl = document.getElementById('ball-style') as HTMLSelectElement;
+const ballStyleEl = document.getElementById('ball-style') as HTMLInputElement;
 const strengthValueEl = document.getElementById('strength-value')!;
 const cadenceValueEl = document.getElementById('cadence-value')!;
 const machineStatusEl = document.getElementById('machine-status')!;
 const machineDetailEl = document.getElementById('machine-detail')!;
 const machineToggleEl = document.getElementById('machine-toggle') as HTMLButtonElement;
 const machineOnceEl = document.getElementById('machine-once') as HTMLButtonElement;
+
+function syncFlatChoiceGroup(group: HTMLElement): void {
+  const target = document.getElementById(group.dataset.flatSelect ?? '') as HTMLInputElement | null;
+  if (!target) return;
+  group.querySelectorAll<HTMLButtonElement>('[data-value]').forEach(button => {
+    const selected = button.dataset.value === target.value;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+}
+
+document.querySelectorAll<HTMLElement>('[data-flat-select]').forEach(group => {
+  const target = document.getElementById(group.dataset.flatSelect ?? '') as HTMLInputElement | null;
+  if (!target) return;
+  group.querySelectorAll<HTMLButtonElement>('[data-value]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.value === target.value) return;
+      target.value = button.dataset.value ?? target.value;
+      syncFlatChoiceGroup(group);
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+  syncFlatChoiceGroup(group);
+});
 const targetMarker = new THREE.Mesh(
   new THREE.RingGeometry(34, 47, 32),
   new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),

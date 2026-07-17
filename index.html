@@ -20,7 +20,7 @@
   .machine-status { color:#8c96aa; font:11px monospace; }
   .machine-status.running { color:#5ee6a8; }
   .machine-actions { display:flex; gap:7px; margin-bottom:10px; }
-  .machine-actions button { flex:1; border:1px solid #4e5975; color:#dce4ff; background:#272c42; border-radius:7px; padding:8px 6px; cursor:pointer; }
+  .machine-actions button { position:relative; flex:1; border:1px solid #4e5975; color:#dce4ff; background:#272c42; border-radius:7px; padding:8px 6px; cursor:pointer; }
   .machine-actions button.primary { color:#17182a; background:#ffd166; border-color:#ffd166; font-weight:700; }
   .machine-actions button.active { background:#193e32; border-color:#5ee6a8; color:#76efba; }
   .machine-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; padding:10px; border-radius:8px; background:rgba(255,255,255,0.035); }
@@ -40,9 +40,8 @@
   .quick-view-buttons button:hover { background:#303851; }
   .quick-view-buttons button.active { border-color:#54d6ff; background:rgba(84,214,255,.16); color:#d9f7ff; box-shadow:0 0 0 1px rgba(84,214,255,.2) inset; }
   .quick-view-note { margin-top:6px; color:#8fa1b7; font-size:10px; line-height:1.4; }
-  .receiver-level-control { display:grid; grid-template-columns:1fr 1.35fr; align-items:center; gap:8px; margin-top:7px; }
-  .receiver-level-control label { color:#aeb8ca; font-size:11px; }
-  .receiver-level-control select { width:100%; color:#e8e8ee; background:#252a40; border:1px solid #454d68; border-radius:5px; padding:5px; }
+  .receiver-level-control { display:grid; gap:5px; margin-top:9px; }
+  .receiver-level-control > span { color:#aeb8ca; font-size:11px; }
   .tracking-actions { display:grid; grid-template-columns:1.35fr 1fr 1fr; gap:6px; margin-top:7px; }
   .tracking-actions button { margin:0; padding:7px 4px; border:1px solid #54d6ff; border-radius:6px; background:rgba(84,214,255,.1); color:#9ceaff; cursor:pointer; }
   .tracking-actions button.active { border-color:#ff697d; background:rgba(255,93,115,.14); color:#ff9aaa; }
@@ -71,9 +70,23 @@
   .machine-control { display:grid; gap:3px; color:#aeb7ca; }
   .machine-control label { display:flex; justify-content:space-between; gap:6px; }
   .machine-control input[type="range"] { width:100%; accent-color:#ffd166; }
-  .machine-control select { width:100%; color:#e8e8ee; background:#252a40; border:1px solid #454d68; border-radius:5px; padding:4px; }
-  .random-control { display:flex; align-items:center; gap:7px; align-self:end; min-height:26px; color:#c5ccdb; }
+  .flat-choice-group { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+  .flat-choice-group.wide { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .flat-choice-button { position:relative; min-height:27px; margin:0; padding:4px 3px; overflow:hidden; border:1px solid #4e5975; border-radius:5px; background:#242940; color:#bfc9dc; font-size:10px; line-height:1.15; cursor:pointer; }
+  .flat-choice-button:hover { background:#303851; color:#fff; }
+  .flat-choice-button.active { border-color:transparent; color:#fff7d6; font-weight:700; background:linear-gradient(#403923,#403923) padding-box,conic-gradient(from var(--edge-angle),transparent 0 34%,#ffd166 43%,#fff 50%,#ffd166 57%,transparent 66%) border-box; box-shadow:0 0 12px rgba(255,209,102,.34),inset 0 0 10px rgba(255,209,102,.13); animation:edge-run 1.45s linear infinite; }
+  .flat-choice-button.active::before,.preset-button.active::before,.machine-actions button.active::before { content:""; position:absolute; width:6px; height:6px; top:3px; right:3px; border-radius:50%; background:#fff7b2; box-shadow:0 0 4px #fff,0 0 10px #ffd166; animation:selected-lamp .72s ease-in-out infinite alternate; }
+  .ball-style-choices { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .ball-style-choices .flat-choice-button { min-height:49px; display:grid; justify-items:center; align-content:center; gap:3px; padding:4px 2px; font-size:9px; }
+  .ball-preview { width:22px; height:22px; border-radius:50%; border:1px solid rgba(255,255,255,.8); box-shadow:inset -4px -5px 7px rgba(0,0,0,.24),0 1px 4px rgba(0,0,0,.42); }
+  .ball-preview.white { background:#f8fafc; }
+  .ball-preview.yellow { background:#ffd62e; }
+  .ball-preview.split { background:linear-gradient(90deg,#f8fafc 0 50%,#ffd62e 50%); }
+  .ball-preview.eight { background:conic-gradient(#f8fafc 0 12.5%,#ffd62e 12.5% 25%,#f8fafc 25% 37.5%,#ffd62e 37.5% 50%,#f8fafc 50% 62.5%,#ffd62e 62.5% 75%,#f8fafc 75% 87.5%,#ffd62e 87.5%); }
+  .ball-preview.rainbow { background:conic-gradient(#f8fafc 0 12.5%,#ff9f43 12.5% 25%,#54d6ff 25% 37.5%,#ffd166 37.5% 50%,#5ee6a8 50% 62.5%,#ff5d73 62.5% 75%,#a66cff 75% 87.5%,#4d96ff 87.5%); }
+  .random-control { display:flex; align-items:center; justify-content:center; gap:7px; align-self:end; min-height:31px; border:1px solid #4e5975; border-radius:5px; background:#242940; color:#c5ccdb; cursor:pointer; }
   .random-control input { accent-color:#ffd166; }
+  .random-control:has(input:checked) { border-color:#ffd166; color:#fff2c2; background:rgba(255,209,102,.16); box-shadow:0 0 10px rgba(255,209,102,.22); }
   .machine-detail { margin:10px 0; padding:9px 10px; color:#adb8cb; line-height:1.55; background:rgba(255,209,102,0.06); border-left:2px solid #ffd166; border-radius:4px; }
   .machine-detail strong { color:#fff; }
   .spin-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; margin-top:7px; }
@@ -87,8 +100,12 @@
   .preset-buttons { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:5px; }
   .preset-button { position:relative; min-height:32px; padding:5px 3px; border:1px solid color-mix(in srgb, var(--preset-color), #222 52%); border-radius:6px; background:color-mix(in srgb, var(--preset-color), transparent 88%); color:#dce1ec; font-size:11px; cursor:pointer; line-height:1.15; }
   .preset-button:hover { background:color-mix(in srgb, var(--preset-color), transparent 76%); }
-  .preset-button.active { border-color:var(--preset-color); color:#fff; box-shadow:0 0 0 1px color-mix(in srgb, var(--preset-color), transparent 55%) inset; }
+  .preset-button.active { border-color:transparent; color:#fff; font-weight:750; background:linear-gradient(color-mix(in srgb,var(--preset-color),#171a2c 72%),color-mix(in srgb,var(--preset-color),#171a2c 72%)) padding-box,conic-gradient(from var(--edge-angle),transparent 0 34%,var(--preset-color) 43%,#fff 50%,var(--preset-color) 57%,transparent 66%) border-box; box-shadow:0 0 14px color-mix(in srgb,var(--preset-color),transparent 48%),inset 0 0 11px color-mix(in srgb,var(--preset-color),transparent 68%); animation:edge-run 1.45s linear infinite; }
   .preset-button kbd { position:absolute; top:2px; right:3px; color:#818ba0; font:8px monospace; }
+  @property --edge-angle { syntax:"<angle>"; initial-value:0deg; inherits:false; }
+  @keyframes edge-run { to { --edge-angle:360deg; } }
+  @keyframes selected-lamp { from { opacity:.25; transform:scale(.75); } to { opacity:1; transform:scale(1.16); } }
+  @media (prefers-reduced-motion:reduce) { .flat-choice-button.active,.preset-button.active { animation:none; } .flat-choice-button.active::before,.preset-button.active::before,.machine-actions button.active::before { animation:none; } }
   .machine-footer { display:flex; justify-content:space-between; margin-top:11px; padding-top:8px; border-top:1px solid rgba(255,255,255,.07); color:#8993a8; font:10px monospace; }
   .stats { position:fixed; top:16px; right:16px; background:rgba(22,22,44,0.92); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 16px; color:#e0e0e0; z-index:10; font-size:12px; font-family:monospace; line-height:1.8; }
   .stats span { color:#ffd166; }
@@ -188,36 +205,39 @@
       <input id="machine-strength" type="range" min="60" max="140" step="5" value="100">
     </div>
     <div class="machine-control">
-      <label for="machine-level"><span>选手强度参考</span></label>
-      <select id="machine-level">
-        <option value="beginner">业余入门</option>
-        <option value="club" selected>业余俱乐部</option>
-        <option value="advanced">专业训练</option>
-        <option value="world">世界级参考</option>
-      </select>
+      <label><span>选手强度参考</span></label>
+      <input id="machine-level" type="hidden" value="club">
+      <div class="flat-choice-group" data-flat-select="machine-level" aria-label="选手强度参考">
+        <button class="flat-choice-button" type="button" data-value="beginner">业余入门</button>
+        <button class="flat-choice-button" type="button" data-value="club">业余俱乐部</button>
+        <button class="flat-choice-button" type="button" data-value="advanced">专业训练</button>
+        <button class="flat-choice-button" type="button" data-value="world">世界级参考</button>
+      </div>
     </div>
     <div class="machine-control">
-      <label for="ball-style"><span>球体样式</span></label>
-      <select id="ball-style">
-        <option value="white">纯白</option>
-        <option value="yellow">纯黄</option>
-        <option value="white-yellow-split">白黄双拼</option>
-        <option value="white-yellow-eight">白黄8拼</option>
-        <option value="rainbow" selected>彩球</option>
-      </select>
+      <label><span>球体样式</span></label>
+      <input id="ball-style" type="hidden" value="rainbow">
+      <div class="flat-choice-group ball-style-choices" data-flat-select="ball-style" aria-label="球体样式">
+        <button class="flat-choice-button" type="button" data-value="white"><span class="ball-preview white"></span><span>纯白</span></button>
+        <button class="flat-choice-button" type="button" data-value="yellow"><span class="ball-preview yellow"></span><span>纯黄</span></button>
+        <button class="flat-choice-button" type="button" data-value="white-yellow-split"><span class="ball-preview split"></span><span>白黄双拼</span></button>
+        <button class="flat-choice-button" type="button" data-value="white-yellow-eight"><span class="ball-preview eight"></span><span>白黄8拼</span></button>
+        <button class="flat-choice-button" type="button" data-value="rainbow"><span class="ball-preview rainbow"></span><span>彩球</span></button>
+      </div>
     </div>
     <div class="machine-control">
       <label for="machine-cadence"><span>频率</span><span id="cadence-value">1.2 球/秒</span></label>
       <input id="machine-cadence" type="range" min="0.4" max="3" step="0.1" value="1.2">
     </div>
     <div class="machine-control">
-      <label for="machine-lane"><span>落点区域</span></label>
-      <select id="machine-lane">
-        <option value="random">全台随机</option>
-        <option value="forehand">正手位</option>
-        <option value="middle">中路</option>
-        <option value="backhand">反手位</option>
-      </select>
+      <label><span>落点区域</span></label>
+      <input id="machine-lane" type="hidden" value="random">
+      <div class="flat-choice-group" data-flat-select="machine-lane" aria-label="落点区域">
+        <button class="flat-choice-button" type="button" data-value="random">全台随机</button>
+        <button class="flat-choice-button" type="button" data-value="forehand">正手位</button>
+        <button class="flat-choice-button" type="button" data-value="middle">中路</button>
+        <button class="flat-choice-button" type="button" data-value="backhand">反手位</button>
+      </div>
     </div>
     <label class="random-control"><input id="machine-randomize" type="checkbox" checked> 落点扰动</label>
   </div>
@@ -249,13 +269,14 @@
       </div>
       <div id="stance-status" class="quick-view-note"><strong>当前身位：</strong>固定 · 中台</div>
       <div class="receiver-level-control">
-        <label for="receiver-level">接球者反应等级</label>
-        <select id="receiver-level">
-          <option value="beginner">业余入门</option>
-          <option value="club" selected>业余俱乐部</option>
-          <option value="advanced">专业训练</option>
-          <option value="world">世界级参考</option>
-        </select>
+        <span>接球者反应等级</span>
+        <input id="receiver-level" type="hidden" value="club">
+        <div class="flat-choice-group wide" data-flat-select="receiver-level" aria-label="接球者反应等级">
+          <button class="flat-choice-button" type="button" data-value="beginner">业余入门</button>
+          <button class="flat-choice-button" type="button" data-value="club">业余俱乐部</button>
+          <button class="flat-choice-button" type="button" data-value="advanced">专业训练</button>
+          <button class="flat-choice-button" type="button" data-value="world">世界级参考</button>
+        </div>
       </div>
       <div id="receiver-level-status" class="quick-view-note"></div>
       <h3>固定身位</h3>
