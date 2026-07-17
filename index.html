@@ -112,6 +112,28 @@
   .demo-panel { position:fixed; right:16px; bottom:16px; width:360px; padding:14px; color:#e8e8ee; background:rgba(17,19,38,.94); border:1px solid rgba(255,255,255,.1); border-radius:12px; z-index:12; font-size:12px; }
   .demo-panel h2 { font-size:14px; margin-bottom:5px; }
   .demo-panel p { color:#9da9bd; line-height:1.45; }
+  .demo-intro { margin:0 0 9px; color:#8fa1b7; line-height:1.45; }
+  .demo-list { display:grid; gap:7px; }
+  .demo-item { border:1px solid #3d465e; border-radius:8px; overflow:hidden; background:rgba(35,40,61,.58); transition:border-color .18s,box-shadow .18s; }
+  .demo-item.active { border-color:#54d6ff; box-shadow:0 0 14px rgba(84,214,255,.18); }
+  .demo-item.pending { opacity:.62; }
+  .demo-item-head { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:5px; align-items:center; min-height:42px; padding:6px 7px 6px 9px; }
+  .demo-item-title { min-width:0; color:#eef4ff; font-weight:700; line-height:1.25; }
+  .demo-item-title small { display:block; margin-top:2px; color:#8290a8; font-size:9px; font-weight:500; }
+  .demo-quick,.demo-expand { margin:0; border-radius:5px; cursor:pointer; }
+  .demo-quick { padding:6px 7px; border:1px solid #54d6ff; background:rgba(84,214,255,.1); color:#9ceaff; font-size:10px; white-space:nowrap; }
+  .demo-quick:hover { background:rgba(84,214,255,.2); }
+  .demo-expand { width:28px; height:28px; padding:0; border:1px solid #59647f; background:#242940; color:#dce4ff; font-size:15px; line-height:1; }
+  .demo-expand::before { content:'⌄'; display:block; transform:rotate(-90deg); transition:transform .16s; }
+  .demo-item:not(.collapsed) .demo-expand::before { transform:rotate(0); }
+  .demo-item-body { padding:0 9px 10px; border-top:1px solid rgba(255,255,255,.06); }
+  .demo-item.collapsed .demo-item-body { display:none; }
+  .demo-item-body p { margin:8px 0; color:#aeb9cc; line-height:1.5; }
+  .demo-tags { display:flex; flex-wrap:wrap; gap:5px; margin:7px 0; }
+  .demo-tags span { padding:3px 6px; border-radius:999px; background:rgba(255,209,102,.09); color:#e8ce87; font-size:9px; }
+  .demo-variants { display:flex; gap:6px; margin-top:7px; }
+  .demo-variants button { flex:1; margin:0; padding:6px; border:1px solid #59647f; border-radius:5px; background:#242940; color:#c5cee0; cursor:pointer; font-size:10px; }
+  .demo-variants button.primary { border-color:#5ee6a8; color:#9df1c7; background:rgba(94,230,168,.09); }
   .demo-controls { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin:10px 0; }
   .demo-controls label { display:grid; gap:3px; color:#bdc7d8; }
   .demo-controls input { width:100%; accent-color:#ff5d73; }
@@ -139,7 +161,7 @@
   .utility-window { left:84px; top:16px; width:310px; }
   .machine-window { left:84px; top:164px; width:390px; max-height:calc(100vh - 180px); overflow:auto; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
   .tracking-window { left:490px; top:164px; width:360px; max-height:calc(100vh - 180px); overflow:auto; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
-  .demo-window { right:16px; bottom:16px; width:360px; }
+  .demo-window { right:16px; bottom:16px; width:390px; max-height:calc(100vh - 32px); overflow:auto; scrollbar-width:thin; scrollbar-color:#445 #18182b; }
   .stats-window { right:16px; top:16px; min-width:125px; }
   .stats-window .window-titlebar { padding-bottom:4px; }
   .stats-window .window-body { padding:5px 12px 10px; }
@@ -344,16 +366,39 @@
 <aside id="demo-window" class="ui-window demo-window is-open" data-window="demo-window" aria-label="专题演示">
   <div class="window-titlebar"><div class="demo-header"><h2><i data-lucide="flask-conical"></i> 专题演示</h2></div><button class="window-minimize" type="button" data-window-minimize="demo-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
   <div class="window-body">
-  <h2>专题 01 · 拉球为什么更易上台</h2>
-  <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
-  <div class="demo-controls">
-    <label>力量 <span id="demo-power-value">9.0 m/s</span><input id="demo-power" type="range" min="55" max="140" value="90" step="5"></label>
-    <label>上旋 <span id="demo-spin-value">4500 rpm</span><input id="demo-spin" type="range" min="0" max="8000" value="4500" step="250"></label>
-    <label>侧旋 <span id="demo-side-value">0 rpm</span><input id="demo-side" type="range" min="-4000" max="4000" value="0" step="250"></label>
+  <p class="demo-intro">为录屏讨论准备的开放性问题。点击“参数默认”会载入专题预设，并自动联动观察与跟球。</p>
+  <div class="demo-list">
+    <section class="demo-item" data-demo-item="topspin">
+      <div class="demo-item-head"><div class="demo-item-title">专题 01 · 拉球为什么更易上台<small>旋转、下扎与落台前冲</small></div><button class="demo-quick" type="button" data-demo-start="topspin">参数默认</button><button class="demo-expand" type="button" aria-label="折叠拉球专题" aria-expanded="true"></button></div>
+      <div class="demo-item-body">
+        <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
+        <div class="demo-controls">
+          <label>力量 <span id="demo-power-value">9.0 m/s</span><input id="demo-power" type="range" min="55" max="140" value="90" step="5"></label>
+          <label>上旋 <span id="demo-spin-value">4500 rpm</span><input id="demo-spin" type="range" min="0" max="8000" value="4500" step="250"></label>
+          <label>侧旋 <span id="demo-side-value">0 rpm</span><input id="demo-side" type="range" min="-4000" max="4000" value="0" step="250"></label>
+        </div>
+        <div class="demo-actions"><button id="demo-preview">更新轨迹</button><button id="demo-fire">对比发射并跟球</button></div>
+        <div class="demo-legend"><span><i style="background:#b8c0cc"></i>无旋基准</span><span><i style="background:#ff5d73"></i>跟球对象</span></div>
+        <div id="demo-metrics" class="demo-metrics"></div>
+      </div>
+    </section>
+    <section class="demo-item collapsed" data-demo-item="child-lob">
+      <div class="demo-item-head"><div class="demo-item-title">专题 02 · 小朋友眼中的被放高球<small>为什么小孩容易怕放高球</small></div><button class="demo-quick" type="button" data-demo-start="child-lob">参数默认</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的被放高球" aria-expanded="false"></button></div>
+      <div class="demo-item-body"><p>把视线降到儿童 0.95m，并站到远台跟随高吊球。相同的球会占据更大的仰角、在视野里停留更久，落点和扣杀时机也更难判断。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>远台</span><span>高吊球</span><span>扣杀判断</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-lob-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-lob">儿童视角</button></div></div>
+    </section>
+    <section class="demo-item collapsed" data-demo-item="child-triangle">
+      <div class="demo-item-head"><div class="demo-item-title">专题 03 · 小朋友眼中的小三角<small>近网短球为什么显得又远又窄</small></div><button class="demo-quick" type="button" data-demo-start="child-triangle">参数默认</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的小三角" aria-expanded="false"></button></div>
+      <div class="demo-item-body"><p>儿童眼高配合近台站位，观察近网边线“小三角”。低视点、较短手臂和更大的上步距离叠加，让短球的落点与第二跳更难同时读清。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>正手小三角</span><span>无旋短球</span><span>摆短</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-triangle-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-triangle">儿童视角</button></div></div>
+    </section>
+    <section class="demo-item collapsed" data-demo-item="low-stance">
+      <div class="demo-item-head"><div class="demo-item-title">专题 04 · 为什么基本功也要压低重心<small>看清弧线、找到击球点、稳定移动</small></div><button class="demo-quick" type="button" data-demo-start="low-stance">参数默认</button><button class="demo-expand" type="button" aria-label="展开压低重心专题" aria-expanded="false"></button></div>
+      <div class="demo-item-body"><p>用同一条前冲弧圈对照 1.8m 直立视线与 1.35m 压低重心。较低且稳定的视线更接近球的飞行层，弧线、弹跳和建议击球点更容易形成连续参照。</p><div class="demo-tags"><span>同球路对照</span><span>自动移动</span><span>前冲弧圈</span><span>快带/挡</span></div><div class="demo-variants"><button type="button" data-demo-variant="stance-high">高重心 1.8m</button><button class="primary" type="button" data-demo-start="low-stance">压低重心 1.35m</button></div></div>
+    </section>
+    <section class="demo-item collapsed pending" data-demo-item="more">
+      <div class="demo-item-head"><div class="demo-item-title">更多演示添加中<small>欢迎围绕现象提出问题与补充解释</small></div><span></span><button class="demo-expand" type="button" aria-label="展开更多演示说明" aria-expanded="false"></button></div>
+      <div class="demo-item-body"><p>后续将继续补充旋转识别、落点选择、步法衔接和不同水平球员处理差异等可录屏专题。</p></div>
+    </section>
   </div>
-  <div class="demo-actions"><button id="demo-preview">更新轨迹</button><button id="demo-fire">对比发射</button></div>
-  <div class="demo-legend"><span><i style="background:#b8c0cc"></i>无旋基准</span><span><i style="background:#ff5d73"></i>旋转拉球</span></div>
-  <div id="demo-metrics" class="demo-metrics"></div>
   </div>
 </aside>
 <dialog id="parameter-dialog">

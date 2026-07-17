@@ -89,9 +89,18 @@ function restoreWindowPreferences(): void {
 }
 
 function setWindowOpen(id: WindowId, open: boolean): void {
-  document.getElementById(id)?.classList.toggle('is-closed', !open);
+  const windowEl = document.getElementById(id);
+  windowEl?.classList.toggle('is-closed', !open);
   document.querySelector<HTMLButtonElement>(`[data-window-toggle="${id}"]`)?.classList.toggle('is-open', open);
-  saveWindowPreferences();
+  if (open && windowEl) {
+    requestAnimationFrame(() => {
+      const rect = windowEl.getBoundingClientRect();
+      clampWindowPosition(windowEl, rect.left, rect.top);
+      saveWindowPreferences();
+    });
+  } else {
+    saveWindowPreferences();
+  }
 }
 
 function syncWindowIndicators(): void {
@@ -1120,8 +1129,11 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
   if (!isReady()) return undefined;
   if (!preserveTracking) stopTrackingDemo();
   setMachineVisible(true);
-  demoActive = false;
-  clearDemoLines();
+  if (!preserveTracking) {
+    demoActive = false;
+    setActiveDemoItem(null);
+    clearDemoLines();
+  }
   if (getBallCount() >= 80) {
     const oldest = getBalls()[0];
     scene.remove(oldest.mesh);
@@ -1729,6 +1741,7 @@ resetMachineOnClear = () => {
   firstBounceMarker.visible = false;
   serveTrajectoryLine.visible = false;
   demoActive = false;
+  setActiveDemoItem(null);
   clearDemoLines();
 };
 
@@ -1804,13 +1817,105 @@ trackingReplayPauseEl.addEventListener('click', () => {
 setBallStyle(ballStyleEl.value as BallStyle);
 updateReceiverLevelDisplay();
 
-// ==================== Topspin demonstration ====================
+// ==================== Topic demonstrations ====================
 const demoPowerEl = document.getElementById('demo-power') as HTMLInputElement;
 const demoSpinEl = document.getElementById('demo-spin') as HTMLInputElement;
 const demoSideEl = document.getElementById('demo-side') as HTMLInputElement;
 const demoLines: THREE.Line[] = [];
 let demoActive = false;
+type DemoId = 'topspin' | 'child-lob' | 'child-triangle' | 'low-stance';
+type DemoVariant = 'child-lob-adult' | 'child-triangle-adult' | 'stance-high';
+interface DemoScenario {
+  presetId: string;
+  eyeHeightMm: number;
+  stanceMode: StanceMode;
+  stance: ViewStance;
+  lane: TargetLane;
+  technique: ContactTechnique;
+  strength: number;
+  playerLevel: PlayerLevel;
+  receiverLevel: PlayerLevel;
+}
+const DEMO_SCENARIOS: Record<Exclude<DemoId, 'topspin'>, DemoScenario> = {
+  'child-lob': {
+    presetId: 'lob', eyeHeightMm: 950, stanceMode: 'fixed', stance: 'far', lane: 'middle',
+    technique: 'smash', strength: 100, playerLevel: 'club', receiverLevel: 'club',
+  },
+  'child-triangle': {
+    presetId: 'float-short', eyeHeightMm: 950, stanceMode: 'fixed', stance: 'near', lane: 'forehand',
+    technique: 'drop-shot', strength: 100, playerLevel: 'club', receiverLevel: 'club',
+  },
+  'low-stance': {
+    presetId: 'loop-fast', eyeHeightMm: 1350, stanceMode: 'auto', stance: 'near', lane: 'middle',
+    technique: 'block', strength: 92, playerLevel: 'advanced', receiverLevel: 'club',
+  },
+};
 updateTrackingControlState();
+
+function setActiveDemoItem(id: DemoId | null): void {
+  document.querySelectorAll<HTMLElement>('[data-demo-item]').forEach(item => {
+    item.classList.toggle('active', item.dataset.demoItem === id);
+  });
+}
+
+function syncAllFlatChoices(): void {
+  document.querySelectorAll<HTMLElement>('[data-flat-select]').forEach(syncFlatChoiceGroup);
+}
+
+function expandDemoItem(item: HTMLElement, expanded: boolean): void {
+  item.classList.toggle('collapsed', !expanded);
+  const button = item.querySelector<HTMLButtonElement>('.demo-expand');
+  button?.setAttribute('aria-expanded', String(expanded));
+  if (button) button.setAttribute('aria-label', `${expanded ? '折叠' : '展开'}${item.querySelector('.demo-item-title')?.firstChild?.textContent?.trim() ?? '专题'}`);
+  const windowEl = item.closest<HTMLElement>('.ui-window');
+  if (windowEl) requestAnimationFrame(() => {
+    const rect = windowEl.getBoundingClientRect();
+    clampWindowPosition(windowEl, rect.left, rect.top);
+  });
+}
+
+document.querySelectorAll<HTMLButtonElement>('.demo-expand').forEach(button => {
+  button.addEventListener('click', () => {
+    const item = button.closest<HTMLElement>('.demo-item');
+    if (item) expandDemoItem(item, item.classList.contains('collapsed'));
+  });
+});
+
+async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: DemoVariant): Promise<void> {
+  const base = DEMO_SCENARIOS[id];
+  const scenario: DemoScenario = { ...base };
+  if (variant === 'child-lob-adult' || variant === 'child-triangle-adult') scenario.eyeHeightMm = 1600;
+  if (variant === 'stance-high') scenario.eyeHeightMm = 1800;
+
+  stopTrackingDemo(false);
+  setMachineRunning(false);
+  strengthEl.value = String(scenario.strength);
+  levelEl.value = scenario.playerLevel;
+  receiverLevel = scenario.receiverLevel;
+  receiverLevelEl.value = receiverLevel;
+  laneEl.value = scenario.lane;
+  randomizeEl.checked = false;
+  trackingContinuousEl.checked = false;
+  trackingReplayEl.checked = false;
+  viewHeightMm = scenario.eyeHeightMm;
+  viewStance = scenario.stance;
+  stanceMode = scenario.stanceMode;
+  persistStanceMode();
+  setActivePreset(getPreset(scenario.presetId), false);
+  contactTechnique = scenario.technique;
+  updateTechniqueOptions();
+  syncAllFlatChoices();
+  updateReceiverLevelDisplay();
+  updateMachineDetails();
+  applyViewPreset();
+  updateContactGuide(false);
+
+  await startTrackingDemo();
+  demoActive = true;
+  setActiveDemoItem(id);
+  setWindowOpen('tracking-window', true);
+  syncWindowIndicators();
+}
 
 function clearDemoLines(): void {
   for (const line of demoLines) { scene.remove(line); line.geometry.dispose(); }
@@ -1862,15 +1967,48 @@ function updateDemo(): void {
   });
 }
 
-function fireDemo(): void {
+function attachDemoBallToTracking(ball: RapierBall): void {
+  trackingEnabled = true;
+  trackingContinuous = false;
+  trackingAutoReplay = false;
+  trackingContinuousEl.checked = false;
+  trackingReplayEl.checked = false;
+  trackingQueue.length = 0;
+  resetAutomaticStance();
+  applyViewPreset();
+  updateContactGuide(true);
+  beginTrackingBall(ball, performance.now(), true, true);
+  setWindowOpen('tracking-window', true);
+  updateTrackingControlState();
+}
+
+async function fireDemo(useDefaults = false): Promise<void> {
+  if (useDefaults) {
+    demoPowerEl.value = '90';
+    demoSpinEl.value = '4500';
+    demoSideEl.value = '0';
+  }
+  await clearBalls();
+  setMachineRunning(false);
+  setActivePreset(getPreset('loop-spin'), false);
+  contactTechnique = 'block';
+  updateTechniqueOptions();
+  viewHeightMm = 1600;
+  viewStance = 'mid';
+  stanceMode = 'fixed';
+  persistStanceMode();
   demoActive = true;
   setMachineVisible(false);
   updateDemo();
+  let trackedBall: RapierBall | null | undefined;
   demoSolutions().forEach((solution, i) => {
     const zOffset = i === 0 ? -45 : 45;
     const ball = spawnPhysicsBall(solution.originMm.x, solution.originMm.y, solution.originMm.z + zOffset, solution.velocityMm.x, solution.velocityMm.y, solution.velocityMm.z, i === 0 ? 0xb8c0cc : 0xff5d73);
     ball?.body.setAngvel(solution.angularVelocity, true);
+    if (i === 1) trackedBall = ball;
   });
+  if (trackedBall) attachDemoBallToTracking(trackedBall);
+  setActiveDemoItem('topspin');
   syncWindowIndicators();
 }
 demoPowerEl.addEventListener('input', updateDemo);
@@ -1882,7 +2020,22 @@ document.getElementById('demo-preview')!.addEventListener('click', () => {
   updateDemo();
   syncWindowIndicators();
 });
-document.getElementById('demo-fire')!.addEventListener('click', fireDemo);
+document.getElementById('demo-fire')!.addEventListener('click', () => void fireDemo());
+document.querySelectorAll<HTMLButtonElement>('[data-demo-start]').forEach(button => {
+  button.addEventListener('click', () => {
+    const id = button.dataset.demoStart as DemoId;
+    if (id === 'topspin') void fireDemo(true);
+    else void startPresetTopicDemo(id);
+  });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-demo-variant]').forEach(button => {
+  button.addEventListener('click', () => {
+    const variant = button.dataset.demoVariant as DemoVariant;
+    const item = button.closest<HTMLElement>('[data-demo-item]');
+    const id = item?.dataset.demoItem as Exclude<DemoId, 'topspin'> | undefined;
+    if (id) void startPresetTopicDemo(id, variant);
+  });
+});
 updateDemo();
 syncWindowIndicators();
 
