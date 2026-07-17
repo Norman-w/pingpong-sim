@@ -90,6 +90,11 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 
 `receiverLevel` 只调制**能力项**（步速、上步深度、起跳增益、反应），不另开一套「假扇形表」。
 
+### 身体尺度主输入（已校准：1）
+
+**继续用现有眼高 `viewHeightMm` 反推身高/臂长**；儿童演示调低眼高即变矮、扇形变浅。  
+第一期不新增独立身高控件；眼高同时服务相机与够球尺度（与现状一致）。
+
 ## 领域模块
 
 新增 `src/lobProcessability.ts`（扇形与打分）+ 在跟踪循环调用：
