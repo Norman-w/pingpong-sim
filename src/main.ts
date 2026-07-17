@@ -588,6 +588,7 @@ function createMachineModel(): { group: THREE.Group; head: THREE.Group; upperMas
 }
 
 const machineModel = createMachineModel();
+const MACHINE_NOZZLE_TIP_LOCAL_X = 265;
 const currentMachineBallOrigin = new THREE.Vector3(45, 1120, TABLE_CENTER_Z);
 
 function setMachineVisible(visible: boolean): void {
@@ -935,13 +936,23 @@ function updateMachinePose(solution: LaunchSolution): void {
   const { originMm, velocityMm } = solution;
   currentMachineBallOrigin.set(originMm.x, originMm.y, originMm.z);
   machineModel.group.position.set(originMm.x - 45, 0, originMm.z - TABLE_CENTER_Z);
-  machineModel.head.position.y = originMm.y;
   const horizontalSpeed = Math.hypot(velocityMm.x, velocityMm.z);
   machineModel.head.rotation.order = 'ZYX';
   machineModel.head.rotation.z = Math.atan2(velocityMm.y, horizontalSpeed);
   machineModel.head.rotation.y = -Math.atan2(velocityMm.z, velocityMm.x);
+  // The nozzle rotates with the head. Recompute the head centre from the
+  // rotated nozzle tip so the visible outlet always touches the physical
+  // ball at its true launch position, including high/low attacking arcs.
+  const launchDirection = new THREE.Vector3(velocityMm.x, velocityMm.y, velocityMm.z).normalize();
+  const desiredNozzleTip = new THREE.Vector3(originMm.x, originMm.y, originMm.z)
+    .addScaledVector(launchDirection, -BALL_RADIUS);
+  const rotatedNozzleOffset = new THREE.Vector3(MACHINE_NOZZLE_TIP_LOCAL_X, 0, 0)
+    .applyQuaternion(machineModel.head.quaternion);
+  machineModel.head.position.copy(desiredNozzleTip)
+    .sub(machineModel.group.position)
+    .sub(rotatedNozzleOffset);
   const lowerY = 970;
-  const upperY = originMm.y - 90;
+  const upperY = machineModel.head.position.y - 90;
   machineModel.upperMast.position.y = (lowerY + upperY) / 2;
   machineModel.upperMast.scale.y = Math.max(1, upperY - lowerY);
 }
@@ -1295,7 +1306,7 @@ function updateTrackingReplay(deltaSeconds: number): void {
     }
     stopTrackingReplay();
     if (trackingEnabled && trackingContinuous) {
-      launchNextTrackingBall(performance.now(), true);
+      launchNextTrackingBall(true);
     } else if (trackingEnabled) {
       document.getElementById('tracking-status')!.innerHTML =
         `<strong>单球流程完成</strong><br>正常跟球与慢放回看均已结束；关闭再开启可开始下一球。`;
@@ -1352,11 +1363,19 @@ function stopTrackingDemo(resetStatus = true): void {
 function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, skipSourceGlance = false): void {
   clearReceiveFailureFeedback();
   trackedReceiveBounceX = null;
-  trackingRecording = [];
   trackingRecordingStartedAt = now;
   trackingRecordingFinalized = false;
   const velocity = ball.body.linvel();
   const position = ball.body.translation();
+  const rotation = ball.body.rotation();
+  const angularVelocity = ball.body.angvel();
+  const initialPosition = new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000);
+  trackingRecording = [{
+    time: 0,
+    position: initialPosition.clone(),
+    rotation: new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
+    angularVelocity: new THREE.Vector3(angularVelocity.x, angularVelocity.y, angularVelocity.z),
+  }];
   // A receiver watches the server before an opening serve, so there is no
   // artificial "follow the ball, then look back" detour. The selected
   // receiver level controls how quickly the serve is read and reacquired.
@@ -1376,7 +1395,9 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
     contactFailed: false,
   };
   controls.enabled = false;
-  trackingTrailPoints = [];
+  trackingTrailPoints = [initialPosition.clone()];
+  trackingTrailLine.geometry.dispose();
+  trackingTrailLine.geometry = new THREE.BufferGeometry().setFromPoints(trackingTrailPoints);
   trackingTrailLine.visible = true;
   contactGuideMarker.visible = true;
   actualContactMarker.visible = false;
@@ -1395,7 +1416,7 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
     : '');
 }
 
-function launchNextTrackingBall(now: number, restoreFollowView = false): void {
+function launchNextTrackingBall(restoreFollowView = false): void {
   if (!trackingEnabled) return;
   resetAutomaticStance();
   if (restoreFollowView) applyViewPreset();
@@ -1405,8 +1426,12 @@ function launchNextTrackingBall(now: number, restoreFollowView = false): void {
     stopTrackingDemo();
     return;
   }
-  beginTrackingBall(ball, now, restoreFollowView, !restoreFollowView);
-  trackingNextShotAt = now + 1000 / readMachineSettings().cadence;
+  // solveLaunch() is synchronous and can take a noticeable amount of time.
+  // The replay clock must start after the ball actually exists, otherwise
+  // solver time becomes a fake stationary segment at the beginning.
+  const launchedAt = performance.now();
+  beginTrackingBall(ball, launchedAt, restoreFollowView, !restoreFollowView);
+  trackingNextShotAt = launchedAt + 1000 / readMachineSettings().cadence;
 }
 
 async function startTrackingDemo(): Promise<void> {
@@ -1423,7 +1448,7 @@ async function startTrackingDemo(): Promise<void> {
   // no hidden preset, lane, or randomization override. If the selected stance
   // cannot handle that ball, the demo must expose the miss instead of adapting
   // the incoming ball to make the technique look successful.
-  launchNextTrackingBall(performance.now(), true);
+  launchNextTrackingBall(true);
   updateTrackingControlState();
 }
 
@@ -1698,7 +1723,7 @@ trackingReplayEl.addEventListener('change', () => {
     trackingQueue.length = 0;
   } else if (trackingReplayMode) {
     stopTrackingReplay();
-    if (trackingEnabled && trackingContinuous) launchNextTrackingBall(performance.now(), true);
+    if (trackingEnabled && trackingContinuous) launchNextTrackingBall(true);
   }
   updateTrackingControlState();
 });
