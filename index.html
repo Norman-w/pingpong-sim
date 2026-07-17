@@ -134,7 +134,8 @@
   .demo-item-title { min-width:0; color:#eef4ff; font-weight:700; line-height:1.25; }
   .demo-item-title small { display:block; margin-top:2px; color:#8290a8; font-size:9px; font-weight:500; }
   .demo-quick,.demo-expand { margin:0; border-radius:5px; cursor:pointer; }
-  .demo-quick { padding:6px 7px; border:1px solid #54d6ff; background:rgba(84,214,255,.1); color:#9ceaff; font-size:10px; white-space:nowrap; }
+  .demo-quick { display:inline-flex; align-items:center; gap:4px; padding:6px 8px; border:1px solid #54d6ff; background:rgba(84,214,255,.1); color:#9ceaff; font-size:11px; font-weight:650; white-space:nowrap; line-height:1; }
+  .demo-quick svg { width:12px; height:12px; flex:0 0 auto; }
   .demo-quick:hover { background:rgba(84,214,255,.2); }
   .demo-expand { width:28px; height:28px; padding:0; border:1px solid #59647f; background:#242940; color:#dce4ff; font-size:15px; line-height:1; }
   .demo-expand::before { content:'⌄'; display:block; transform:rotate(-90deg); transition:transform .16s; }
@@ -386,10 +387,10 @@
 <aside id="demo-window" class="ui-window demo-window is-open" data-window="demo-window" aria-label="专题演示">
   <div class="window-titlebar"><div class="demo-header"><h2><i data-lucide="flask-conical"></i> 专题演示</h2></div><button class="window-minimize" type="button" data-window-minimize="demo-window" aria-label="最小化"><i data-lucide="minus"></i></button></div>
   <div class="window-body">
-  <p class="demo-intro">为录屏讨论准备的开放性问题。点击“参数默认”会载入专题预设，并自动联动观察与跟球。</p>
+  <p class="demo-intro">为录屏讨论准备的开放性问题。点击「演示」开始专题，并自动联动观察与跟球。</p>
   <div class="demo-list">
     <section class="demo-item" data-demo-item="topspin">
-      <div class="demo-item-head"><div class="demo-item-title">专题 01 · 拉球为什么更易上台<small>旋转、下扎与落台前冲</small></div><button class="demo-quick" type="button" data-demo-start="topspin">参数默认</button><button class="demo-expand" type="button" aria-label="折叠拉球专题" aria-expanded="true"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 01 · 拉球为什么更易上台<small>旋转、下扎与落台前冲</small></div><button class="demo-quick" type="button" data-demo-start="topspin" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="折叠拉球专题" aria-expanded="true"></button></div>
       <div class="demo-item-body">
         <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
         <div class="demo-controls">
@@ -403,15 +404,15 @@
       </div>
     </section>
     <section class="demo-item collapsed" data-demo-item="child-lob">
-      <div class="demo-item-head"><div class="demo-item-title">专题 02 · 小朋友眼中的被放高球<small>为什么小孩容易怕放高球</small></div><button class="demo-quick" type="button" data-demo-start="child-lob">参数默认</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的被放高球" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 02 · 小朋友眼中的被放高球<small>为什么小孩容易怕放高球</small></div><button class="demo-quick" type="button" data-demo-start="child-lob" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的被放高球" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>把视线降到儿童 0.95m，并站到远台跟随高吊球。相同的球会占据更大的仰角、在视野里停留更久，落点和扣杀时机也更难判断。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>远台</span><span>高吊球</span><span>扣杀判断</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-lob-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-lob">儿童视角</button></div></div>
     </section>
     <section class="demo-item collapsed" data-demo-item="child-triangle">
-      <div class="demo-item-head"><div class="demo-item-title">专题 03 · 小朋友眼中的小三角<small>近网短球为什么显得又远又窄</small></div><button class="demo-quick" type="button" data-demo-start="child-triangle">参数默认</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的小三角" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 03 · 小朋友眼中的小三角<small>近网短球为什么显得又远又窄</small></div><button class="demo-quick" type="button" data-demo-start="child-triangle" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的小三角" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>儿童眼高配合近台站位，观察近网边线“小三角”。低视点、较短手臂和更大的上步距离叠加，让短球的落点与第二跳更难同时读清。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>正手小三角</span><span>无旋短球</span><span>摆短</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-triangle-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-triangle">儿童视角</button></div></div>
     </section>
     <section class="demo-item collapsed" data-demo-item="low-stance">
-      <div class="demo-item-head"><div class="demo-item-title">专题 04 · 为什么基本功也要压低重心<small>看清弧线、找到击球点、稳定移动</small></div><button class="demo-quick" type="button" data-demo-start="low-stance">参数默认</button><button class="demo-expand" type="button" aria-label="展开压低重心专题" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 04 · 为什么基本功也要压低重心<small>看清弧线、找到击球点、稳定移动</small></div><button class="demo-quick" type="button" data-demo-start="low-stance" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开压低重心专题" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>用同一条前冲弧圈对照 1.8m 直立视线与 1.35m 压低重心。较低且稳定的视线更接近球的飞行层，弧线、弹跳和建议击球点更容易形成连续参照。</p><div class="demo-tags"><span>同球路对照</span><span>自动移动</span><span>前冲弧圈</span><span>快带/挡</span></div><div class="demo-variants"><button type="button" data-demo-variant="stance-high">高重心 1.8m</button><button class="primary" type="button" data-demo-start="low-stance">压低重心 1.35m</button></div></div>
     </section>
     <section class="demo-item collapsed pending" data-demo-item="more">

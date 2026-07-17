@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { createIcons, MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus } from 'lucide';
+import { createIcons, MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus, Play } from 'lucide';
 import { init as initPhysics, isReady, createBall, removeBall, clearAllBalls, getBalls, step as physicsStep, syncMeshes, getBallCount, type RapierBall } from './physics';
 import {
   SHOT_CATEGORIES,
@@ -22,7 +22,7 @@ import {
 } from './serveMachine';
 import { buildReplayCuePoints, listReplayCueRecipe, type ReplayCuePoint } from './replayCuePoints';
 
-createIcons({ icons: { MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus } });
+createIcons({ icons: { MousePointer2, ArrowDown, X, Wrench, Bot, Eye, FlaskConical, BarChart3, Minus, Play } });
 
 // ==================== 2D window manager ====================
 const WINDOW_IDS = ['utility-window', 'machine-window', 'tracking-window', 'demo-window', 'stats-window'] as const;
@@ -2253,12 +2253,8 @@ function attachDemoBallToTracking(ball: RapierBall): void {
   updateTrackingControlState();
 }
 
-async function fireDemo(useDefaults = false): Promise<void> {
-  if (useDefaults) {
-    demoPowerEl.value = '90';
-    demoSpinEl.value = '4500';
-    demoSideEl.value = '0';
-  }
+async function fireDemo(): Promise<void> {
+  // Use the current sliders as-is. Unmodified controls already hold the topic defaults.
   await clearBalls();
   setMachineRunning(false);
   setActivePreset(getPreset('loop-spin'), false);
@@ -2295,7 +2291,7 @@ document.getElementById('demo-fire')!.addEventListener('click', () => void fireD
 document.querySelectorAll<HTMLButtonElement>('[data-demo-start]').forEach(button => {
   button.addEventListener('click', () => {
     const id = button.dataset.demoStart as DemoId;
-    if (id === 'topspin') void fireDemo(true);
+    if (id === 'topspin') void fireDemo();
     else void startPresetTopicDemo(id);
   });
 });
