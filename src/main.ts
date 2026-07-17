@@ -1323,9 +1323,38 @@ function startTrackingReplay(sourceBall: RapierBall): void {
   syncWindowIndicators();
 }
 
+function sampleTrackingReplayFrame(time: number): { position: THREE.Vector3; angularVelocity: THREE.Vector3 } {
+  let right = 1;
+  while (right < trackingRecording.length && trackingRecording[right].time < time) right += 1;
+  const left = Math.max(0, right - 1);
+  const a = trackingRecording[left];
+  const b = trackingRecording[Math.min(right, trackingRecording.length - 1)];
+  const span = Math.max(1e-6, b.time - a.time);
+  const replayAlpha = THREE.MathUtils.clamp((time - a.time) / span, 0, 1);
+  return {
+    position: new THREE.Vector3().lerpVectors(a.position, b.position, replayAlpha),
+    angularVelocity: new THREE.Vector3().lerpVectors(a.angularVelocity, b.angularVelocity, replayAlpha),
+  };
+}
+
+function advanceTrackingReplaySpin(angularVelocity: THREE.Vector3, deltaSeconds: number): void {
+  const angularSpeed = angularVelocity.length();
+  if (angularSpeed <= 1e-6) return;
+  const replayRotationStep = new THREE.Quaternion().setFromAxisAngle(
+    angularVelocity.clone().multiplyScalar(1 / angularSpeed),
+    angularSpeed * deltaSeconds * trackingSpeed,
+  );
+  // Rapier angular velocity is expressed in world space, hence premultiply.
+  trackingReplayMesh.quaternion.premultiply(replayRotationStep).normalize();
+}
+
 function updateTrackingReplay(deltaSeconds: number): void {
   if (!trackingReplayMode) return;
+  // Pause freezes trajectory time/position, but keeps spin running so the
+  // observer can still read rotation direction and rate at that instant.
   if (trackingReplayPaused) {
+    const pausedFrame = sampleTrackingReplayFrame(trackingReplayTime);
+    advanceTrackingReplaySpin(pausedFrame.angularVelocity, deltaSeconds);
     if (activeQuickView === 'follow') controls.target.copy(trackingReplayMesh.position);
     return;
   }
@@ -1333,24 +1362,9 @@ function updateTrackingReplay(deltaSeconds: number): void {
   const last = trackingRecording[trackingRecording.length - 1];
   const ended = trackingReplayTime >= last.time;
   if (ended) trackingReplayTime = last.time;
-  let right = 1;
-  while (right < trackingRecording.length && trackingRecording[right].time < trackingReplayTime) right += 1;
-  const left = Math.max(0, right - 1);
-  const a = trackingRecording[left];
-  const b = trackingRecording[Math.min(right, trackingRecording.length - 1)];
-  const span = Math.max(1e-6, b.time - a.time);
-  const replayAlpha = THREE.MathUtils.clamp((trackingReplayTime - a.time) / span, 0, 1);
-  trackingReplayMesh.position.lerpVectors(a.position, b.position, replayAlpha);
-  const replayAngularVelocity = new THREE.Vector3().lerpVectors(a.angularVelocity, b.angularVelocity, replayAlpha);
-  const angularSpeed = replayAngularVelocity.length();
-  if (angularSpeed > 1e-6) {
-    const replayRotationStep = new THREE.Quaternion().setFromAxisAngle(
-      replayAngularVelocity.multiplyScalar(1 / angularSpeed),
-      angularSpeed * deltaSeconds * trackingSpeed,
-    );
-    // Rapier angular velocity is expressed in world space, hence premultiply.
-    trackingReplayMesh.quaternion.premultiply(replayRotationStep).normalize();
-  }
+  const frame = sampleTrackingReplayFrame(trackingReplayTime);
+  trackingReplayMesh.position.copy(frame.position);
+  advanceTrackingReplaySpin(frame.angularVelocity, deltaSeconds);
   if (activeQuickView === 'follow') {
     // Keep the replay ball in the observer's gaze with frame-rate-independent
     // smoothing. Third-person quick views deliberately remain untouched.
@@ -1813,6 +1827,14 @@ trackingReplayPauseEl.addEventListener('click', () => {
   if (!trackingReplayMode) return;
   trackingReplayPaused = !trackingReplayPaused;
   trackingReplayPauseEl.textContent = trackingReplayPaused ? '继续回放' : '暂停回放';
+  if (trackingReplayPaused) {
+    const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
+    document.getElementById('tracking-status')!.innerHTML =
+      `<strong>已暂停 · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
+      `轨迹冻结；球体旋转按当前角速度继续，便于观察旋转方向与转速。`;
+  } else {
+    applyTrackingReplayView();
+  }
 });
 setBallStyle(ballStyleEl.value as BallStyle);
 updateReceiverLevelDisplay();
