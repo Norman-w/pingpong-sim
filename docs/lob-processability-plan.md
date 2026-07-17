@@ -21,7 +21,17 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 1. **可处理能力**：落台后沿弹起弧采样，输出 `processability ∈ [0,1]`（够球 × 下落预判难度 × 规则合法）。
 2. **可处理技术集合**：每点给出允许的 `ContactTechnique[]`。
 3. **接球方差异**：儿童/近网上升窗口常坍塌 → 默认偏向下降窗口；成人可偏向上升下压。
-4. **UI（优先）**：窗口 A 错过指示（文案/标记状态）+ 轨迹色带；青色标记仍只标一个当前首选点（常为窗口 B）。
+4. **UI（优先）**：窗口 A 错过时复用现有 `#receive-failure-flash` 边缘变红受击效果（`showReceiveFailure`），文案点名「错过第一合理处理点」；青色标记仍只标一个当前首选点（常为窗口 B）。轨迹色带可第二期再加。
+
+### 错过指示形态（已校准：D）
+
+与「错过击球点」同一套全屏边缘变红：
+
+- DOM：`#receive-failure-flash` + `#receive-failure-reason`（见 `index.html`）
+- 触发函数：`showReceiveFailure(reason)`（`src/main.ts`）
+- 第一期：在判定儿童/当前接球方已越过窗口 A 且该窗口对其不可达或未抓住时调用，例如  
+  `showReceiveFailure('错过第一合理处理点：落台后上升初期的可下压窗口')`  
+- 不新做另一套闪光；可微调文案，动画沿用 `receive-failure`。
 
 ## 领域模块
 
