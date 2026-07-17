@@ -484,10 +484,15 @@ export function solveLaunch(
   };
 }
 
-export function sampleTrajectory(
+export interface SampledTrajectory {
+  points: Array<{ x: number; y: number; z: number }>;
+  tableImpacts: Array<{ x: number; y: number; z: number }>;
+}
+
+export function sampleTrajectoryDetails(
   solution: LaunchSolution,
   seconds = 1.25,
-): Array<{ x: number; y: number; z: number }> {
+): SampledTrajectory {
   const w = { ...solution.angularVelocity };
   const state: SimState = {
     x: solution.originMm.x / 1000, y: solution.originMm.y / 1000,
@@ -495,6 +500,7 @@ export function sampleTrajectory(
     vy: solution.velocityMm.y / 1000, vz: solution.velocityMm.z / 1000,
   };
   const points: Array<{ x: number; y: number; z: number }> = [];
+  const tableImpacts: Array<{ x: number; y: number; z: number }> = [];
   const dt = 1 / 240;
   let bounces = 0;
   for (let t = 0; t < seconds && state.y > 0 && state.x < 3.35 && Math.abs(state.z) < 2.2; t += dt) {
@@ -524,11 +530,19 @@ export function sampleTrajectory(
       state.vz += impulseZ / BALL_MASS;
       w.x -= BALL_RADIUS * impulseZ / BALL_INERTIA;
       w.z += BALL_RADIUS * impulseX / BALL_INERTIA;
+      tableImpacts.push({ x: state.x * 1000, y: TABLE_CONTACT_Y * 1000, z: state.z * 1000 });
       bounces += 1;
     }
     points.push({ x: state.x * 1000, y: state.y * 1000, z: state.z * 1000 });
   }
-  return points;
+  return { points, tableImpacts };
+}
+
+export function sampleTrajectory(
+  solution: LaunchSolution,
+  seconds = 1.25,
+): Array<{ x: number; y: number; z: number }> {
+  return sampleTrajectoryDetails(solution, seconds).points;
 }
 
 export function getPreset(id: string): ShotPreset {

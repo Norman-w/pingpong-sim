@@ -11,6 +11,7 @@ import {
   getPreset,
   getShotKnowledge,
   sampleTrajectory,
+  sampleTrajectoryDetails,
   solveLaunch,
   type LaunchSolution,
   type BallStyle,
@@ -329,6 +330,10 @@ function applyViewPreset(): void {
 function applyQuickView(id: QuickViewId): void {
   if (id === 'follow') {
     applyViewPreset();
+    if (trackingReplayMode && trackingReplayMesh.visible) {
+      controls.target.copy(trackingReplayMesh.position);
+      controls.update();
+    }
     updateContactGuide();
     return;
   }
@@ -444,7 +449,7 @@ const ballMaterial = new THREE.MeshBasicMaterial({
 const BALL_RADIUS = 20;
 const STANDARD_DROP_HEIGHT = 300;
 const SPX = 2055, SPZ = -762;
-const machineBallMeta = new Map<any, { presetId: string; countedLanding: boolean }>();
+const machineBallMeta = new Map<any, { presetId: string; countedLanding: boolean; isOpeningServe: boolean; shownImpactCount: number }>();
 let resetMachineOnClear = (): void => {};
 
 function spawnPhysicsBall(
@@ -597,6 +602,40 @@ const CONTACT_TECHNIQUES: Record<ContactTechnique, ContactTechniqueSpec> = {
 let contactTechnique: ContactTechnique = 'forehand-loop';
 const TABLE_TECHNIQUES = new Set<ContactTechnique>(['push', 'drop-shot', 'long-push', 'lift', 'forehand-flick', 'backhand-flick']);
 const AUTO_STANCE_MOVE_SPEED_MM_PER_SEC = 1450;
+const TABLE_CONTACT_AFTER_BOUNCE_MM: Record<ContactTechnique, number> = {
+  'forehand-loop': 0,
+  'forehand-drive': 0,
+  'backhand-loop': 0,
+  'counter-loop': 0,
+  block: 0,
+  punch: 0,
+  push: 230,
+  'drop-shot': 150,
+  'long-push': 300,
+  lift: 250,
+  'forehand-flick': 280,
+  'backhand-flick': 280,
+  chop: 0,
+  smash: 0,
+  lob: 0,
+};
+let trackedReceiveBounceX: number | null = null;
+
+function requiredReceiveBounceCount(): number {
+  // A serve has already bounced once on the server's side. The receiver may
+  // only play it after the second table impact; a normal fed ball is playable
+  // after its first impact on the receiver's side.
+  return activePreset.mode === 'serve' ? 2 : 1;
+}
+
+function tableTechniqueContactX(technique: ContactTechnique): number {
+  const receiverBounceX = trackedReceiveBounceX ?? activePreset.targetDepthMm;
+  return THREE.MathUtils.clamp(
+    receiverBounceX + TABLE_CONTACT_AFTER_BOUNCE_MM[technique],
+    TABLE_CENTER_X + 120,
+    2660,
+  );
+}
 
 function persistStanceMode(): void {
   try { localStorage.setItem(STANCE_MODE_KEY, stanceMode); } catch { /* private mode */ }
@@ -611,7 +650,9 @@ function configuredContactZ(): number {
 
 function autoStanceDepth(technique: ContactTechnique): { x: number; label: string } {
   const spec = CONTACT_TECHNIQUES[technique];
-  if (TABLE_TECHNIQUES.has(technique)) return { x: (spec.tableContactX ?? 2280) + spec.forwardMm, label: '台内近台' };
+  if (TABLE_TECHNIQUES.has(technique)) {
+    return { x: Math.max(2760, tableTechniqueContactX(technique) + spec.forwardMm), label: '台内近台' };
+  }
   if (technique === 'block' || technique === 'punch' || technique === 'forehand-drive') return { x: 3150, label: '近台' };
   if (technique === 'chop') return { x: 4250, label: '远台削球' };
   if (technique === 'lob') return { x: 4500, label: '远台防守' };
@@ -660,7 +701,10 @@ function showReceiveFailure(reason: string): void {
 
 function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, tableImpacts: number, remainingSeconds = 0): string | null {
   const spec = CONTACT_TECHNIQUES[contactTechnique];
-  if (TABLE_TECHNIQUES.has(contactTechnique) && tableImpacts > 1) return '错过第二跳前的台内击球时机';
+  const receiveBounceCount = requiredReceiveBounceCount();
+  if (TABLE_TECHNIQUES.has(contactTechnique) && tableImpacts > receiveBounceCount) {
+    return '错过接球方落台后、下一跳前的台内击球时机';
+  }
   const lateralError = Math.abs(ballPoint.z - guide.z);
   if (lateralError > 340) return `横向差 ${Math.round(lateralError)} mm，球已超出该手法的可触及范围`;
   if (stanceMode === 'auto') {
@@ -698,7 +742,7 @@ function moveAutomaticStanceForBall(ballPoint: THREE.Vector3, velocity: { x: num
   if (stanceMode !== 'auto') return;
   const depth = autoStanceDepth(contactTechnique);
   const guideX = TABLE_TECHNIQUES.has(contactTechnique)
-    ? CONTACT_TECHNIQUES[contactTechnique].tableContactX ?? 2280
+    ? tableTechniqueContactX(contactTechnique)
     : depth.x - CONTACT_TECHNIQUES[contactTechnique].forwardMm;
   if (velocity.x > 0.05 && ballPoint.x < guideX) {
     const seconds = (guideX - ballPoint.x) / (velocity.x * 1000);
@@ -760,11 +804,11 @@ function updateTechniqueOptions(): void {
 }
 
 type ContactGuideState = 'hittable' | 'unreachable';
-const contactGuideMaterial = new THREE.MeshBasicMaterial({ color: 0x35e87b, wireframe: true, transparent: true, opacity: 0.95 });
+const contactGuideMaterial = new THREE.MeshBasicMaterial({ color: 0x54d6ff, wireframe: true, transparent: true, opacity: 0.95 });
 const contactGuideMarker = new THREE.Mesh(new THREE.SphereGeometry(28, 16, 12), contactGuideMaterial);
 const actualContactMarker = new THREE.Mesh(
   new THREE.SphereGeometry(34, 18, 14),
-  new THREE.MeshBasicMaterial({ color: 0xffd166, wireframe: true, transparent: true, opacity: 0.95 }),
+  new THREE.MeshBasicMaterial({ color: 0x35e87b, wireframe: true, transparent: true, opacity: 0.95 }),
 );
 const contactLink = new THREE.Line(
   new THREE.BufferGeometry(),
@@ -780,7 +824,6 @@ scene.add(contactGuideMarker, actualContactMarker, contactLink, trackingTrailLin
 let trackingTrailPoints: THREE.Vector3[] = [];
 
 function setContactGuideState(state: ContactGuideState): void {
-  contactGuideMaterial.color.setHex(state === 'hittable' ? 0x35e87b : 0xff304f);
   contactGuideMarker.userData.receiveState = state;
   const stanceStatus = document.getElementById('stance-status');
   if (stanceStatus) stanceStatus.dataset.guideState = state;
@@ -799,7 +842,7 @@ function contactGuidePosition(): THREE.Vector3 {
       ? -80
       : spec.lateralMm;
   return new THREE.Vector3(
-    spec.tableContactX ?? stance.x - spec.forwardMm,
+    TABLE_TECHNIQUES.has(contactTechnique) ? tableTechniqueContactX(contactTechnique) : stance.x - spec.forwardMm,
     TABLE_TOP_Y + spec.aboveTableMm + heightAdjustment,
     stance.z + lateralMm,
   );
@@ -826,7 +869,7 @@ function updateContactGuide(show = contactGuideMarker.visible): void {
     .map(id => CONTACT_TECHNIQUES[id].label).join('、');
   document.getElementById('tracking-status')!.innerHTML =
     `<strong>${spec.label}</strong>：${spec.description}<br>击球时机：${spec.timing}<br>` +
-    `<span style="color:#8fa1b7">当前球路可处理：${available}<br>网状标识球：绿色可处理，红色不可处理</span>`;
+    `<span style="color:#8fa1b7">当前球路可处理：${available}<br>网状标识球：青色为建议位置，绿色可处理，红色不可处理</span>`;
   updateStanceDisplay();
 }
 
@@ -919,6 +962,7 @@ document.getElementById('dialog-close')!.addEventListener('click', () => paramet
 
 function setActivePreset(preset: ShotPreset, updateCadence = true): void {
   activePreset = preset;
+  trackedReceiveBounceX = null;
   if (updateCadence) cadenceEl.value = String(preset.cadence);
   document.querySelectorAll<HTMLButtonElement>('.preset-button').forEach(button => {
     button.classList.toggle('active', button.dataset.preset === preset.id);
@@ -980,7 +1024,12 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
   );
   if (!ball) return undefined;
   ball.body.setAngvel(solution.angularVelocity, true);
-  machineBallMeta.set(ball.body, { presetId: preset.id, countedLanding: false });
+  machineBallMeta.set(ball.body, {
+    presetId: preset.id,
+    countedLanding: false,
+    isOpeningServe: preset.mode === 'serve',
+    shownImpactCount: 0,
+  });
   updateMachineHead(solution.originMm.y);
   targetMarker.position.set(solution.targetMm.x, TABLE_TOP_Y + 2, solution.targetMm.z);
   targetMarker.visible = true;
@@ -988,10 +1037,14 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
   firstBounceMarker.visible = isOpeningServe;
   serveTrajectoryLine.visible = isOpeningServe;
   if (isOpeningServe) {
-    firstBounceMarker.position.set(preset.firstBounceMm ?? 720, TABLE_TOP_Y + 3, solution.targetMm.z);
+    const sampledServe = sampleTrajectoryDetails(solution, 1.05);
+    const firstImpact = sampledServe.tableImpacts[0];
+    const secondImpact = sampledServe.tableImpacts[1];
+    if (firstImpact) firstBounceMarker.position.set(firstImpact.x, TABLE_TOP_Y + 3, firstImpact.z);
+    if (secondImpact) targetMarker.position.set(secondImpact.x, TABLE_TOP_Y + 2, secondImpact.z);
     serveTrajectoryLine.geometry.dispose();
     serveTrajectoryLine.geometry = new THREE.BufferGeometry().setFromPoints(
-      sampleTrajectory(solution, 1.05).map(point => new THREE.Vector3(point.x, point.y, point.z)),
+      sampledServe.points.map(point => new THREE.Vector3(point.x, point.y, point.z)),
     );
     serveTrajectoryLine.computeLineDistances();
   }
@@ -1044,7 +1097,12 @@ const trackingSpeedEl = document.getElementById('tracking-speed') as HTMLInputEl
 const trackingSpeedValueEl = document.getElementById('tracking-speed-value')!;
 let trackingSpeed = Number(trackingSpeedEl.value);
 const SOURCE_TURN_SPEED_DEG_PER_SEC = 180;
-interface TrackingSnapshot { time: number; position: THREE.Vector3; }
+interface TrackingSnapshot {
+  time: number;
+  position: THREE.Vector3;
+  rotation: THREE.Quaternion;
+  angularVelocity: THREE.Vector3;
+}
 let trackingRecording: TrackingSnapshot[] = [];
 let trackingRecordingStartedAt = 0;
 let trackingRecordingFinalized = false;
@@ -1052,9 +1110,39 @@ let trackingReplayMode = false;
 let trackingReplayPaused = false;
 let trackingReplayTime = 0;
 let trackingReplaySourceBall: RapierBall | null = null;
+let trackingReplayViews: QuickViewId[] = [];
+let trackingReplayViewIndex = 0;
 const trackingReplayMesh = new THREE.Mesh(bGeo, ballMaterial);
 trackingReplayMesh.visible = false;
 scene.add(trackingReplayMesh);
+
+function selectedReplayViews(): QuickViewId[] {
+  const selected = Array.from(document.querySelectorAll<HTMLInputElement>('[data-replay-view]:checked'))
+    .map(input => input.dataset.replayView as QuickViewId);
+  return selected.length > 0 ? selected : ['follow'];
+}
+
+function replayViewLabel(view: QuickViewId): string {
+  return view === 'follow' ? '跟球视角' : QUICK_VIEWS[view].label;
+}
+
+function applyTrackingReplayView(): void {
+  const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
+  if (view === 'follow') {
+    applyViewPreset();
+    controls.target.copy(trackingReplayMesh.position);
+  } else {
+    const preset = QUICK_VIEWS[view];
+    camera.position.set(...preset.position);
+    controls.target.set(...preset.target);
+    setQuickViewActive(view);
+  }
+  controls.enabled = true;
+  controls.update();
+  document.getElementById('tracking-status')!.innerHTML =
+    `<strong>慢放回看 · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
+    `视角 ${trackingReplayViewIndex + 1}/${trackingReplayViews.length}；球体位置与旋转均按实录复现。`;
+}
 
 function turnViewAtHumanSpeed(desiredTarget: THREE.Vector3, deltaSeconds: number): void {
   const cameraDistance = Math.max(1, controls.target.distanceTo(camera.position));
@@ -1096,19 +1184,23 @@ function startTrackingReplay(sourceBall: RapierBall): void {
   trackingReplayMode = true;
   trackingReplayPaused = false;
   trackingReplayTime = 0;
+  trackingReplayViews = selectedReplayViews();
+  trackingReplayViewIndex = 0;
   trackingReplayMesh.position.copy(trackingRecording[0].position);
+  trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   trackingReplayMesh.visible = true;
-  controls.enabled = true;
+  applyTrackingReplayView();
   trackingReplayPauseEl.disabled = false;
   trackingReplayPauseEl.textContent = '暂停回放';
-  document.getElementById('tracking-status')!.innerHTML =
-    `<strong>慢放回看</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
-    `可暂停在任意位置，也可切换第三人称视角；继续实时跟球会重新进入正常跟球相机。`;
   syncWindowIndicators();
 }
 
 function updateTrackingReplay(deltaSeconds: number): void {
-  if (!trackingReplayMode || trackingReplayPaused) return;
+  if (!trackingReplayMode) return;
+  if (trackingReplayPaused) {
+    if (activeQuickView === 'follow') controls.target.copy(trackingReplayMesh.position);
+    return;
+  }
   trackingReplayTime += deltaSeconds * trackingSpeed;
   const last = trackingRecording[trackingRecording.length - 1];
   const ended = trackingReplayTime >= last.time;
@@ -1119,8 +1211,33 @@ function updateTrackingReplay(deltaSeconds: number): void {
   const a = trackingRecording[left];
   const b = trackingRecording[Math.min(right, trackingRecording.length - 1)];
   const span = Math.max(1e-6, b.time - a.time);
-  trackingReplayMesh.position.lerpVectors(a.position, b.position, THREE.MathUtils.clamp((trackingReplayTime - a.time) / span, 0, 1));
+  const replayAlpha = THREE.MathUtils.clamp((trackingReplayTime - a.time) / span, 0, 1);
+  trackingReplayMesh.position.lerpVectors(a.position, b.position, replayAlpha);
+  const replayAngularVelocity = new THREE.Vector3().lerpVectors(a.angularVelocity, b.angularVelocity, replayAlpha);
+  const angularSpeed = replayAngularVelocity.length();
+  if (angularSpeed > 1e-6) {
+    const replayRotationStep = new THREE.Quaternion().setFromAxisAngle(
+      replayAngularVelocity.multiplyScalar(1 / angularSpeed),
+      angularSpeed * deltaSeconds * trackingSpeed,
+    );
+    // Rapier angular velocity is expressed in world space, hence premultiply.
+    trackingReplayMesh.quaternion.premultiply(replayRotationStep).normalize();
+  }
+  if (activeQuickView === 'follow') {
+    // Keep the replay ball in the observer's gaze with frame-rate-independent
+    // smoothing. Third-person quick views deliberately remain untouched.
+    const followAlpha = 1 - Math.exp(-12 * deltaSeconds);
+    controls.target.lerp(trackingReplayMesh.position, followAlpha);
+  }
   if (ended) {
+    if (trackingReplayViewIndex + 1 < trackingReplayViews.length) {
+      trackingReplayViewIndex += 1;
+      trackingReplayTime = 0;
+      trackingReplayMesh.position.copy(trackingRecording[0].position);
+      trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
+      applyTrackingReplayView();
+      return;
+    }
     stopTrackingReplay();
     if (trackingEnabled && trackingContinuous) {
       launchNextTrackingBall(performance.now(), true);
@@ -1160,6 +1277,7 @@ function updateTrackingControlState(): void {
 function stopTrackingDemo(resetStatus = true): void {
   stopTrackingReplay();
   clearReceiveFailureFeedback();
+  trackedReceiveBounceX = null;
   setContactGuideState('hittable');
   trackingEnabled = false;
   trackingSession = null;
@@ -1178,6 +1296,7 @@ function stopTrackingDemo(resetStatus = true): void {
 
 function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, skipSourceGlance = false): void {
   clearReceiveFailureFeedback();
+  trackedReceiveBounceX = null;
   trackingRecording = [];
   trackingRecordingStartedAt = now;
   trackingRecordingFinalized = false;
@@ -1200,14 +1319,14 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
   trackingTrailLine.visible = true;
   contactGuideMarker.visible = true;
   actualContactMarker.visible = false;
-  (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0xffd166);
+  (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0x35e87b);
   trackingTarget.set(position.x * 1000, position.y * 1000, position.z * 1000);
   // Only the first ball establishes the initial eye target. During continuous
   // tracking, keep the previous contact target and let the normal camera
   // interpolation acquire the next ball without a sudden viewpoint jump.
   if (snapCamera) controls.target.copy(trackingTarget);
   const initialGuide = contactGuidePosition();
-  const initialFailure = contactFailureReason(initialGuide, initialGuide, 1, 1);
+  const initialFailure = contactFailureReason(initialGuide, initialGuide, requiredReceiveBounceCount(), 1);
   setContactGuideState(initialFailure ? 'unreachable' : 'hittable');
   updateTrackingControlState();
   setTrackingStatus('follow-launch');
@@ -1256,7 +1375,16 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   const velocity = session.ball.body.linvel();
   const ballPoint = new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000);
   if (!trackingRecordingFinalized) {
-    trackingRecording.push({ time: (now - trackingRecordingStartedAt) / 1000, position: ballPoint.clone() });
+    trackingRecording.push({
+      time: (now - trackingRecordingStartedAt) / 1000,
+      position: ballPoint.clone(),
+      rotation: session.ball.mesh.quaternion.clone(),
+      angularVelocity: new THREE.Vector3(
+        session.ball.body.angvel().x,
+        session.ball.body.angvel().y,
+        session.ball.body.angvel().z,
+      ),
+    });
   }
   const lastTrailPoint = trackingTrailPoints[trackingTrailPoints.length - 1];
   if (!lastTrailPoint || lastTrailPoint.distanceTo(ballPoint) > 18) {
@@ -1267,6 +1395,14 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   }
   const elapsedInPhase = now - session.phaseStartedAt;
   const visualElapsedInPhase = elapsedInPhase;
+  const receiveBounceCount = requiredReceiveBounceCount();
+  if (
+    TABLE_TECHNIQUES.has(contactTechnique) &&
+    session.ball.tableImpacts === receiveBounceCount &&
+    session.ball.lastTableImpact
+  ) {
+    trackedReceiveBounceX = session.ball.lastTableImpact.x * 1000;
+  }
   moveAutomaticStanceForBall(ballPoint, velocity, deltaSeconds);
   const guide = contactGuidePosition();
   let trajectoryGuide = guide;
@@ -1275,7 +1411,7 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   // Once the ball has bounced, project the elite body-relative contact plane
   // onto the current physical flight path. The cyan marker therefore sits on
   // the actual arc instead of floating at an unrelated fixed height.
-  if (session.ball.tableImpacts > 0 && velocity.x > 0.05 && position.x * 1000 < guide.x) {
+  if (session.ball.tableImpacts >= receiveBounceCount && velocity.x > 0.05 && position.x * 1000 < guide.x) {
     const timeToPlane = (guide.x / 1000 - position.x) / velocity.x;
     const projected = new THREE.Vector3(
       guide.x,
@@ -1299,7 +1435,7 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
     setContactGuideState(predictedFailure ? 'unreachable' : 'hittable');
   }
   const distanceToGuide = ballPoint.distanceTo(trajectoryGuide);
-  if (session.ball.tableImpacts > 0 && distanceToGuide < session.closestDistance) {
+  if (session.ball.tableImpacts >= receiveBounceCount && distanceToGuide < session.closestDistance) {
     session.closestDistance = distanceToGuide;
     session.closestPoint.copy(ballPoint);
   }
@@ -1317,21 +1453,26 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
   } else if (session.phase === 'look-back') {
     machineLookPoint.copy(incomingSource.position());
     trackingTarget.lerp(machineLookPoint, 0.13);
-    if (visualElapsedInPhase > 520) {
+    // Short serves reach the receiver quickly. A full long-ball source glance
+    // consumes the entire between-bounces window, so table techniques use a
+    // compact glance and reacquisition while keeping the same phase sequence.
+    const sourceGlanceMs = TABLE_TECHNIQUES.has(contactTechnique) ? 140 : 520;
+    if (visualElapsedInPhase > sourceGlanceMs) {
       session.phase = 'reacquire';
       session.phaseStartedAt = now;
       setTrackingStatus('reacquire');
     }
   } else if (session.phase === 'reacquire') {
     trackingTarget.lerp(ballPoint, 0.2);
-    if (visualElapsedInPhase > 300) {
+    const reacquireMs = TABLE_TECHNIQUES.has(contactTechnique) ? 120 : 300;
+    if (visualElapsedInPhase > reacquireMs) {
       session.phase = 'follow-contact';
       session.phaseStartedAt = now;
-      setTrackingStatus('follow-contact', `蓝色标记为${CONTACT_TECHNIQUES[contactTechnique].timing}的基准击球点。`);
+      setTrackingStatus('follow-contact', `青色标记为${CONTACT_TECHNIQUES[contactTechnique].timing}的建议击球点。`);
     }
   } else if (session.phase === 'follow-contact') {
     trackingTarget.copy(ballPoint);
-    const hasRequiredBounce = !TABLE_TECHNIQUES.has(contactTechnique) || session.ball.tableImpacts >= 1;
+    const hasRequiredBounce = !TABLE_TECHNIQUES.has(contactTechnique) || session.ball.tableImpacts >= receiveBounceCount;
     if (position.x * 1000 >= guide.x && hasRequiredBounce) {
       session.phase = 'contact-hold';
       session.phaseStartedAt = now;
@@ -1340,7 +1481,7 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
       actualContactMarker.visible = true;
       const offset = ballPoint.distanceTo(trajectoryGuide);
       const delta = ballPoint.clone().sub(guide);
-      const bounceNote = TABLE_TECHNIQUES.has(contactTechnique) ? `第 ${session.ball.tableImpacts} 次落台后、第二跳前。` : '';
+      const bounceNote = TABLE_TECHNIQUES.has(contactTechnique) ? '接球方落台后、下一跳前。' : '';
       const failureReason = contactFailureReason(ballPoint, guide, session.ball.tableImpacts);
       if (failureReason) {
         session.contactFailed = true;
@@ -1350,9 +1491,10 @@ function updateTrackingDemo(now: number, deltaSeconds: number): void {
         setTrackingStatus('contact-hold', `接球失败：${failureReason}。红色标记为错过击球窗口时的球位置。`);
       } else {
         setContactGuideState('hittable');
-        setTrackingStatus('contact-hold', `${bounceNote}黄色标记为实际球到达击球平面的瞬间；与精英基准点相差 ${Math.round(offset)} mm（高度 ${Math.round(delta.y)} / 横向 ${Math.round(delta.z)} mm）。`);
+        (actualContactMarker.material as THREE.MeshBasicMaterial).color.setHex(0x35e87b);
+        setTrackingStatus('contact-hold', `${bounceNote}绿色标记为可处理的实际触球位置，青色标记为建议位置；两者相差 ${Math.round(offset)} mm（高度 ${Math.round(delta.y)} / 横向 ${Math.round(delta.z)} mm）。`);
       }
-    } else if (session.ball.tableImpacts > 0 && (position.y < 0.08 || velocity.x <= 0)) {
+    } else if (hasRequiredBounce && (position.y < 0.08 || velocity.x <= 0 || session.ball.tableImpacts > receiveBounceCount)) {
       session.phase = 'contact-hold';
       session.phaseStartedAt = now;
       session.contactFailed = true;
@@ -1603,6 +1745,14 @@ function animate(): void {
 
   for (const ball of getBalls()) {
     const meta = machineBallMeta.get(ball.body);
+    if (meta?.isOpeningServe && ball.tableImpacts > meta.shownImpactCount && ball.lastTableImpact) {
+      meta.shownImpactCount = ball.tableImpacts;
+      if (ball.tableImpacts === 1) {
+        firstBounceMarker.position.set(ball.lastTableImpact.x * 1000, TABLE_TOP_Y + 3, ball.lastTableImpact.z * 1000);
+      } else if (ball.tableImpacts === 2) {
+        targetMarker.position.set(ball.lastTableImpact.x * 1000, TABLE_TOP_Y + 2, ball.lastTableImpact.z * 1000);
+      }
+    }
     if (
       meta && !meta.countedLanding &&
       ball.lastTableImpact && ball.lastTableImpact.x > 1.37
