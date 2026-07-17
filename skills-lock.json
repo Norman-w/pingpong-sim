@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "drill-me": {
+      "source": "timini/drill-me",
+      "sourceType": "github",
+      "skillPath": "skills/me/SKILL.md",
+      "computedHash": "f8846e7667b1d0c73ca35b8be8cb9cf701358270c7dde2777092ecfea7f31e3b"
+    },
+    "drill-status": {
+      "source": "timini/drill-me",
+      "sourceType": "github",
+      "skillPath": "skills/status/SKILL.md",
+      "computedHash": "ec0933eb9ae386a5808c933b865ee7a61f0e2b3544edded5c372802cc4417beb"
+    }
+  }
+}
