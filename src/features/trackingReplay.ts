@@ -21,9 +21,6 @@ import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './tracking
 
 //#endregion
 
-//#region 常量/配置
-//#endregion
-
 //#region 模型/类型
 export type { FollowOnlyDemoPlayback };
 
