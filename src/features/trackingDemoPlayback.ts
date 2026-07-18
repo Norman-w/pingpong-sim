@@ -13,6 +13,8 @@ export interface FollowOnlyDemoPlayback {
   livePasses: number;
   slowPasses: number;
   slowSpeed?: number;
+  /** After slow passes finish, roll a new ball and repeat the playlist. */
+  continuous?: boolean;
 }
 
 export type LiveDemoPassAction = 'continue-live' | 'start-replay' | 'none';
@@ -23,21 +25,28 @@ export type LiveDemoPassAction = 'continue-live' | 'start-replay' | 'none';
 let demoLivePassesRemaining = 0;
 let demoSlowPassCount = 0;
 let demoSlowSpeed = DEFAULT_DEMO_SLOW_SPEED;
+let demoContinuous = false;
+let demoLivePassesTemplate = 2;
+let demoSlowPassesTemplate = 2;
 //#endregion
 
 //#region 公开 API
 export function clearDemoPlaybackPlan(): void {
   demoLivePassesRemaining = 0;
   demoSlowPassCount = 0;
+  demoContinuous = false;
 }
 
 export function configureFollowOnlyDemoPlayback(
   plan: FollowOnlyDemoPlayback,
   applyUi: { selectFollowOnly: () => void; setReplaySpeed: (speed: number) => void; enableAutoReplay: () => void },
 ): void {
-  demoLivePassesRemaining = Math.max(1, Math.floor(plan.livePasses));
-  demoSlowPassCount = Math.max(0, Math.floor(plan.slowPasses));
+  demoLivePassesTemplate = Math.max(1, Math.floor(plan.livePasses));
+  demoSlowPassesTemplate = Math.max(0, Math.floor(plan.slowPasses));
+  demoLivePassesRemaining = demoLivePassesTemplate;
+  demoSlowPassCount = demoSlowPassesTemplate;
   demoSlowSpeed = plan.slowSpeed ?? DEFAULT_DEMO_SLOW_SPEED;
+  demoContinuous = Boolean(plan.continuous);
   applyUi.selectFollowOnly();
   applyUi.setReplaySpeed(demoSlowSpeed);
   applyUi.enableAutoReplay();
@@ -60,6 +69,17 @@ export function takeSlowFollowPlaylist(): { views: QuickViewId[]; speed: number 
   const speed = demoSlowSpeed;
   demoSlowPassCount = 0;
   return { views, speed };
+}
+
+export function isContinuousFollowDemo(): boolean {
+  return demoContinuous;
+}
+
+/** Reset live/slow counters for the next continuous cycle (keeps continuous flag). */
+export function beginNextContinuousDemoCycle(): void {
+  if (!demoContinuous) return;
+  demoLivePassesRemaining = demoLivePassesTemplate;
+  demoSlowPassCount = demoSlowPassesTemplate;
 }
 
 export function selectFollowViewOnly(): void {

@@ -111,6 +111,11 @@ trackingReplayApi = initTrackingReplay({
   onAutoReplayEnabled: () => trackingDemoApi.clearContinuousQueue(),
   onAutoReplayDisabled: () => trackingDemoApi.resumeContinuousIfActive(),
   onReplayStateChanged: () => trackingDemoApi.updateControlState(),
+  onContinuousFollowDemoCycle: () => {
+    // Next random lob depth, then the same live×2 + slow×2 follow playlist.
+    machineUiApi.rollAndLockLobDemoDepth();
+    trackingDemoApi.launchNextLiveDemoBall();
+  },
 });
 
 trackingDemoApi = initTrackingDemo({

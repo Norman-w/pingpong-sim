@@ -46,6 +46,8 @@ export interface TrackingDemoApi {
   isTrackingEnabled: () => boolean;
   isTrackingContinuous: () => boolean;
   hasTrackingSession: () => boolean;
+  /** Feed the next live ball while tracking stays enabled (demo cycles). */
+  launchNextLiveDemoBall: () => void;
 }
 //#endregion
 
@@ -183,6 +185,7 @@ export function initTrackingDemo(trackingDemoDeps: TrackingDemoDeps): TrackingDe
     isTrackingEnabled: () => trackingEnabled,
     isTrackingContinuous: () => trackingContinuous,
     hasTrackingSession: () => trackingSession !== null,
+    launchNextLiveDemoBall: () => { launchNextTrackingBall(true); },
   };
 }
 
@@ -198,6 +201,7 @@ function advanceClocksBy(pausedMs: number): void {
 function stopTrackingDemo(resetStatus = true): void {
   deps.trackingReplay.clearDemoPlaybackPlan();
   deps.trackingReplay.stopReplay();
+  deps.machineUiApi.lockTargetDepthMm(null);
   deps.receiveStance.clearReceiveFailureFeedback();
   deps.receiveStance.clearMissedPreferredMarker();
   deps.receiveStance.autoDepthOverrideX = null;

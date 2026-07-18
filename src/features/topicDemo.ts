@@ -230,16 +230,19 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   levelEl.value = scenario.playerLevel;
   deps.receiveStance.receiverLevel = scenario.receiverLevel;
   laneEl.value = scenario.lane;
-  randomizeEl.checked = false;
+  randomizeEl.checked = id === 'child-lob';
   deps.trackingDemo.setContinuousChecked(false);
   if (id === 'child-lob') {
-    // Live follow ×2 at normal speed, then slow follow-only replay ×2 — no other cameras.
+    // Continuous random depths: each cycle = live follow ×2 + slow follow ×2.
+    deps.machineUiApi.rollAndLockLobDemoDepth();
     deps.trackingReplay.configureFollowOnlyDemoPlayback({
       livePasses: 2,
       slowPasses: 2,
       slowSpeed: 0.2,
+      continuous: true,
     });
   } else {
+    deps.machineUiApi.lockTargetDepthMm(null);
     deps.trackingReplay.enableAutoReplayForDemo();
   }
   deps.machineUiApi.setActivePreset(getPreset(scenario.presetId), false);

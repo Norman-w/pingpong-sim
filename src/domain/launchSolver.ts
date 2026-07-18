@@ -253,9 +253,16 @@ export function solveLaunch(
     y: preset.sideRpm * spinScale * RPM_TO_RAD,
     z: -preset.topRpm * spinScale * RPM_TO_RAD,
   };
-  let targetX = (preset.targetDepthMm + (preset.mode === 'serve' ? 0 : rallyDepthBiasMm(settings.playerLevel))) / 1000 +
-    (settings.randomize ? centeredNoise(random) * preset.spreadMm * level.accuracyScale / 1000 : 0);
+  let targetX = settings.targetDepthOverrideMm != null
+    ? settings.targetDepthOverrideMm / 1000
+    : (preset.targetDepthMm + (preset.mode === 'serve' ? 0 : rallyDepthBiasMm(settings.playerLevel))) / 1000 +
+      (settings.randomize ? centeredNoise(random) * preset.spreadMm * level.accuracyScale / 1000 : 0);
   let targetZ = randomTargetZ(settings, preset.spreadMm, level.accuracyScale, random);
+  // Keep lob landings in a band that usually carries the next bounce off the table
+  // while still offering near-net vs deeper variety for teaching.
+  if (preset.id === 'lob') {
+    targetX = Math.max(1.86, Math.min(2.30, targetX));
+  }
   if (preset.mode === 'serve') {
     // A legal table-tennis serve first descends onto the server's half, then
     // clears the net after the bounce and lands on the receiver's half.

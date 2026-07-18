@@ -15,6 +15,8 @@ import {
   selectFollowViewOnly,
   setReplaySpeedUi,
   takeSlowFollowPlaylist,
+  isContinuousFollowDemo,
+  beginNextContinuousDemoCycle,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
 import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
@@ -36,6 +38,8 @@ export interface TrackingReplayDeps {
   onAutoReplayEnabled: () => void;
   onAutoReplayDisabled: () => void;
   onReplayStateChanged: () => void;
+  /** After a continuous follow-only playlist finishes slow passes. */
+  onContinuousFollowDemoCycle?: () => void;
 }
 
 export interface TrackingReplayApi {
@@ -52,6 +56,7 @@ export interface TrackingReplayApi {
   /** Child-lob style: N live follow passes, then M slow follow-only replays. */
   configureFollowOnlyDemoPlayback: (plan: FollowOnlyDemoPlayback) => void;
   clearDemoPlaybackPlan: () => void;
+  beginNextContinuousDemoCycle: () => void;
   /** After a live rally ends: another live feed, start slow playlist, or no demo plan. */
   consumeLiveDemoPass: () => 'continue-live' | 'start-replay' | 'none';
   isAutoReplayEnabled: () => boolean;
@@ -174,6 +179,7 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
     enableAutoReplayForDemo,
     configureFollowOnlyDemoPlayback,
     clearDemoPlaybackPlan,
+    beginNextContinuousDemoCycle,
     consumeLiveDemoPass,
     isAutoReplayEnabled: () => trackingAutoReplay,
     syncAutoReplayFromCheckbox: () => { trackingAutoReplay = trackingReplayEl.checked; },
@@ -327,18 +333,14 @@ function startReplay(sourceBall: RapierBall): void {
 
 function updateReplay(deltaSeconds: number): void {
   if (!trackingReplayMode) return;
-  // Pause freezes trajectory time/position, but keeps spin running so the
-  // observer can still read rotation direction and rate at that instant.
+  const followView = deps.receiveStance.activeQuickView === 'follow';
   if (trackingReplayPaused) {
     const pausedFrame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
     advanceTrackingReplaySpin(trackingReplayMesh, pausedFrame.angularVelocity, deltaSeconds, trackingSpeed);
-    if (deps.receiveStance.activeQuickView === 'follow') deps.controls.target.copy(trackingReplayMesh.position);
+    if (followView) deps.controls.target.copy(trackingReplayMesh.position);
     else {
       updateHighArcFraming({
-        camera: deps.camera,
-        controls: deps.controls,
-        ballMm: trackingReplayMesh.position,
-        deltaSeconds,
+        camera: deps.camera, controls: deps.controls, ballMm: trackingReplayMesh.position, deltaSeconds,
       });
     }
     return;
@@ -351,33 +353,25 @@ function updateReplay(deltaSeconds: number): void {
   trackingReplayMesh.position.copy(frame.position);
   advanceTrackingReplaySpin(trackingReplayMesh, frame.angularVelocity, deltaSeconds, trackingSpeed);
   syncReplayCueHighlightForTime(trackingReplayTime);
-  if (deps.receiveStance.activeQuickView === 'follow') {
-    // Keep the replay ball in the observer's gaze with frame-rate-independent
-    // smoothing. Locked quick views keep identity and only adjust framing for high arcs.
-    const followAlpha = 1 - Math.exp(-12 * deltaSeconds);
-    deps.controls.target.lerp(trackingReplayMesh.position, followAlpha);
+  if (followView) {
+    deps.controls.target.lerp(trackingReplayMesh.position, 1 - Math.exp(-12 * deltaSeconds));
   } else {
     updateHighArcFraming({
-      camera: deps.camera,
-      controls: deps.controls,
-      ballMm: trackingReplayMesh.position,
-      deltaSeconds,
+      camera: deps.camera, controls: deps.controls, ballMm: trackingReplayMesh.position, deltaSeconds,
     });
   }
-  if (ended) {
-    if (trackingReplayViewIndex + 1 < trackingReplayViews.length) {
-      trackingReplayViewIndex += 1;
-      trackingReplayTime = 0;
-      trackingReplayActiveCueId = null;
-      trackingReplayMesh.position.copy(trackingRecording[0].position);
-      trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
-      applyTrackingReplayView();
-      highlightReplayCueButtons();
-      return;
-    }
-    // Keep the recording mounted so the same rally can be replayed repeatedly.
-    finishTrackingReplayCycle();
+  if (!ended) return;
+  if (trackingReplayViewIndex + 1 < trackingReplayViews.length) {
+    trackingReplayViewIndex += 1;
+    trackingReplayTime = 0;
+    trackingReplayActiveCueId = null;
+    trackingReplayMesh.position.copy(trackingRecording[0].position);
+    trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
+    applyTrackingReplayView();
+    highlightReplayCueButtons();
+    return;
   }
+  finishTrackingReplayCycle();
 }
 
 //#endregion
@@ -468,6 +462,22 @@ function restartTrackingReplayPlayback(): void {
 }
 
 function finishTrackingReplayCycle(): void {
+  if (isContinuousFollowDemo()) {
+    if (trackingReplaySourceBall) trackingReplaySourceBall.mesh.visible = true;
+    trackingReplaySourceBall = null;
+    trackingReplayMode = false;
+    trackingReplayPaused = false;
+    trackingReplayExhausted = false;
+    trackingReplayTime = 0;
+    trackingReplayMesh.visible = false;
+    trackingReplayActiveCueId = null;
+    spinBillboard.hide();
+    updateReplayControlButtons();
+    refreshCuePointsUi();
+    beginNextContinuousDemoCycle();
+    deps.onContinuousFollowDemoCycle?.();
+    return;
+  }
   trackingReplayExhausted = true;
   trackingReplayPaused = true;
   trackingReplayTime = 0;
@@ -480,8 +490,7 @@ function finishTrackingReplayCycle(): void {
   highlightReplayCueButtons();
   updateReplayControlButtons();
   document.getElementById('tracking-status')!.innerHTML =
-    `<strong>本轮回放结束</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
-    `可点「播放/重播」再次观看，或点选关键暂停点；关闭慢放回看后继续下一球。`;
+    `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}× · 可重播或点选关键暂停点。`;
 }
 
 function syncReplayCueHighlightForTime(time: number): void {
@@ -490,9 +499,8 @@ function syncReplayCueHighlightForTime(time: number): void {
   for (const cue of trackingReplayCuePoints) {
     if (cue.time <= time + 1e-3) active = cue;
   }
-  const nextId = active?.id ?? null;
-  if (nextId === trackingReplayActiveCueId) return;
-  trackingReplayActiveCueId = nextId;
+  if (active?.id === trackingReplayActiveCueId) return;
+  trackingReplayActiveCueId = active?.id ?? null;
   highlightReplayCueButtons();
 }
 //#endregion

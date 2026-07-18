@@ -89,6 +89,8 @@ export interface MachineSettings {
   randomize: boolean;
   playerLevel: PlayerLevel;
   random?: () => number;
+  /** When set, launch solver uses this depth (mm) instead of rolling a new X target. */
+  targetDepthOverrideMm?: number;
 }
 
 export type ShotOutcome = 'in' | 'net' | 'long' | 'wide' | 'serve-fault';
@@ -144,9 +146,9 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'float-short', name: '无旋短球', category: '基础球', description: '低速、近网落点，练习上步和小球处理。', speedMps: 4.2, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 1740, launchHeightMm: 1080, cadence: 1.1, spreadMm: 35, color: orange, shortcut: '1' },
   { id: 'float-long', name: '无旋长球', category: '基础球', description: '中速长落点，轨迹最接近纯抛体基准。', speedMps: 6.5, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 2480, launchHeightMm: 1120, cadence: 1.2, spreadMm: 45, color: orange, shortcut: '2' },
   { id: 'drive', name: '平击快攻', category: '基础球', description: '速度优先、旋转较少的快速进攻球。', speedMps: 9.0, topRpm: 900, sideRpm: 0, corkRpm: 0, targetDepthMm: 2420, launchHeightMm: 1190, cadence: 1.3, spreadMm: 55, color: orange, shortcut: '3' },
-  // Near-net depth: post-bounce rise sits deep in the table so short-reach
-  // receivers (child eye height) miss window A and must wait for window B.
-  { id: 'lob', name: '高吊球', category: '基础球', description: '近网高弧线、低速度，模拟被动防守高球；落台后起跳点深入台内。', speedMps: 3.8, topRpm: 700, sideRpm: 0, corkRpm: 0, targetDepthMm: 1680, launchHeightMm: 1480, cadence: 0.8, spreadMm: 45, color: orange },
+  // Depth centers mid-near; with randomize/spread (and demo override) some land
+  // nearer, some deeper — too-near shorts tend to leave a second bounce on table.
+  { id: 'lob', name: '高吊球', category: '基础球', description: '高弧线、低速度，落点可近可远；落台后起跳点常深入台内。', speedMps: 4.0, topRpm: 700, sideRpm: 0, corkRpm: 0, targetDepthMm: 2050, launchHeightMm: 1480, cadence: 0.8, spreadMm: 200, color: orange },
 
   { id: 'top-light', name: '轻上旋', category: '上旋进攻', description: '温和下扎，落台后轻微前冲。', speedMps: 5.5, topRpm: 1800, sideRpm: 0, corkRpm: 0, targetDepthMm: 2180, launchHeightMm: 1140, cadence: 1.3, spreadMm: 45, color: red, shortcut: '4' },
   { id: 'top-drive', name: '上旋快带', category: '上旋进攻', description: '较平、较快的连续上旋来球。', speedMps: 8.0, topRpm: 3200, sideRpm: 0, corkRpm: 0, targetDepthMm: 2350, launchHeightMm: 1190, cadence: 1.6, spreadMm: 55, color: red },

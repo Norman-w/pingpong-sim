@@ -34,6 +34,9 @@ const MACHINE_NOZZLE_TIP_LOCAL_X = 265;
 const MAX_TRACKED_BALLS = 80;
 /** Lift + tube thickness keep landing discs from z-fighting the table in god view. */
 const LANDING_DISC_CLEARANCE_MM = 10;
+/** Child-lob teaching band (mm): nearer still deep enough to avoid sticky second bounce. */
+const LOB_DEMO_DEPTH_MIN_MM = 1860;
+const LOB_DEMO_DEPTH_MAX_MM = 2280;
 //#endregion
 
 //#region 模型/类型
@@ -74,6 +77,10 @@ export interface MachineUiApi {
   updateMachineOperatingStatus: () => void;
   resetMachineVisualsForClear: () => void;
   incrementLandingCount: () => void;
+  /** Lock rally depth for repeated feeds (null clears). */
+  lockTargetDepthMm: (depthMm: number | null) => void;
+  /** Roll a lob teaching depth (near↔deep) and lock it for the current demo cycle. */
+  rollAndLockLobDemoDepth: () => number;
   readonly targetMarker: THREE.Mesh;
   readonly firstBounceMarker: THREE.Mesh;
   readonly serveTrajectoryLine: THREE.Line;
@@ -94,6 +101,7 @@ let nextMachineShotAt = 0;
 let machineShotCount = 0;
 let machineLandingCount = 0;
 let machineRunning = false;
+let targetDepthOverrideMm: number | null = null;
 
 let presetGroupsEl!: HTMLElement;
 let strengthEl!: HTMLInputElement;
@@ -198,6 +206,8 @@ export function initMachineUi(machineUiDeps: MachineUiDeps): MachineUiApi {
     updateMachineOperatingStatus,
     resetMachineVisualsForClear,
     incrementLandingCount,
+    lockTargetDepthMm: (depthMm: number | null) => { targetDepthOverrideMm = depthMm; },
+    rollAndLockLobDemoDepth,
     get targetMarker() { return targetMarker; },
     get firstBounceMarker() { return firstBounceMarker; },
     get serveTrajectoryLine() { return serveTrajectoryLine; },
@@ -218,11 +228,18 @@ function syncAllFlatChoices(): void {
   document.querySelectorAll<HTMLElement>('[data-flat-select]').forEach(syncFlatChoiceGroup);
 }
 
+function rollAndLockLobDemoDepth(): number {
+  const depthMm = LOB_DEMO_DEPTH_MIN_MM + Math.random() * (LOB_DEMO_DEPTH_MAX_MM - LOB_DEMO_DEPTH_MIN_MM);
+  targetDepthOverrideMm = Math.round(depthMm);
+  return targetDepthOverrideMm;
+}
+
 function readMachineSettings(): MachineSettings {
   return {
     strength: Number(strengthEl.value) / 100,
     cadence: Number(cadenceEl.value),
     targetLane: laneEl.value as TargetLane,
+    ...(targetDepthOverrideMm != null ? { targetDepthOverrideMm } : {}),
     randomize: randomizeEl.checked,
     playerLevel: levelEl.value as PlayerLevel,
   };
@@ -404,6 +421,7 @@ function setMachineRunning(running: boolean): void {
 function resetMachineVisualsForClear(): void {
   setMachineRunning(false);
   setMachineVisible(true);
+  targetDepthOverrideMm = null;
   targetMarker.visible = false;
   firstBounceMarker.visible = false;
   serveTrajectoryLine.visible = false;
