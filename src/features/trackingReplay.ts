@@ -8,14 +8,24 @@ import { formatSpinRpm, initSpinBillboard, type SpinBillboardApi } from './spinB
 import type { TrackingSnapshot } from './trackingTypes';
 import type { QuickViewId, ReceiveStanceApi } from './receiveStance';
 import type { MachineUiApi } from './machineUi';
+import {
+  clearDemoPlaybackPlan,
+  configureFollowOnlyDemoPlayback as applyFollowOnlyDemoPlayback,
+  consumeLiveDemoPass,
+  selectFollowViewOnly,
+  setReplaySpeedUi,
+  takeSlowFollowPlaylist,
+  type FollowOnlyDemoPlayback,
+} from './trackingDemoPlayback';
 
 //#endregion
 
 //#region 常量/配置
-const DEFAULT_DEMO_SLOW_SPEED = 0.2;
 //#endregion
 
 //#region 模型/类型
+export type { FollowOnlyDemoPlayback };
+
 export interface TrackingReplayDeps {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -28,12 +38,6 @@ export interface TrackingReplayDeps {
   onAutoReplayEnabled: () => void;
   onAutoReplayDisabled: () => void;
   onReplayStateChanged: () => void;
-}
-
-export interface FollowOnlyDemoPlayback {
-  livePasses: number;
-  slowPasses: number;
-  slowSpeed?: number;
 }
 
 export interface TrackingReplayApi {
@@ -90,12 +94,6 @@ let trackingReplayActiveCueId: ReplayCuePoint['id'] | null = null;
 let trackingReplayMesh!: THREE.Mesh;
 let spinBillboard!: SpinBillboardApi;
 
-/** Remaining live follow passes including the ball currently in flight. */
-let demoLivePassesRemaining = 0;
-let demoSlowPassCount = 0;
-let demoSlowSpeed = DEFAULT_DEMO_SLOW_SPEED;
-let demoLivePassTotal = 0;
-
 function selectedReplayViews(): QuickViewId[] {
   const selected = Array.from(document.querySelectorAll<HTMLInputElement>('[data-replay-view]:checked'))
     .map(input => input.dataset.replayView as QuickViewId);
@@ -103,15 +101,7 @@ function selectedReplayViews(): QuickViewId[] {
 }
 
 function setReplaySpeed(speed: number): void {
-  trackingSpeed = THREE.MathUtils.clamp(speed, 0.05, 1);
-  trackingSpeedEl.value = String(trackingSpeed);
-  trackingSpeedValueEl.textContent = `${trackingSpeed.toFixed(2)}×`;
-}
-
-function selectFollowViewOnly(): void {
-  document.querySelectorAll<HTMLInputElement>('[data-replay-view]').forEach(input => {
-    input.checked = input.dataset.replayView === 'follow';
-  });
+  trackingSpeed = setReplaySpeedUi(speed, trackingSpeedEl, trackingSpeedValueEl);
 }
 
 function replayViewLabel(view: QuickViewId): string {
@@ -249,31 +239,15 @@ function enableAutoReplayForDemo(): void {
 }
 
 function configureFollowOnlyDemoPlayback(plan: FollowOnlyDemoPlayback): void {
-  demoLivePassTotal = Math.max(1, Math.floor(plan.livePasses));
-  demoLivePassesRemaining = demoLivePassTotal;
-  demoSlowPassCount = Math.max(0, Math.floor(plan.slowPasses));
-  demoSlowSpeed = plan.slowSpeed ?? DEFAULT_DEMO_SLOW_SPEED;
-  selectFollowViewOnly();
-  trackingReplayEl.checked = true;
-  trackingAutoReplay = true;
-  setReplaySpeed(demoSlowSpeed);
-  deps.onAutoReplayEnabled();
-}
-
-function clearDemoPlaybackPlan(): void {
-  demoLivePassesRemaining = 0;
-  demoSlowPassCount = 0;
-  demoLivePassTotal = 0;
-}
-
-function consumeLiveDemoPass(): 'continue-live' | 'start-replay' | 'none' {
-  if (demoLivePassesRemaining <= 0 && demoSlowPassCount <= 0) return 'none';
-  if (demoLivePassesRemaining <= 0) {
-    return demoSlowPassCount > 0 ? 'start-replay' : 'none';
-  }
-  demoLivePassesRemaining -= 1;
-  if (demoLivePassesRemaining > 0) return 'continue-live';
-  return demoSlowPassCount > 0 ? 'start-replay' : 'none';
+  applyFollowOnlyDemoPlayback(plan, {
+    selectFollowOnly: selectFollowViewOnly,
+    setReplaySpeed,
+    enableAutoReplay: () => {
+      trackingReplayEl.checked = true;
+      trackingAutoReplay = true;
+      deps.onAutoReplayEnabled();
+    },
+  });
 }
 
 function refreshCuePointsUi(): void {
@@ -334,11 +308,11 @@ function startReplay(sourceBall: RapierBall): void {
   trackingReplayExhausted = false;
   trackingReplayTime = 0;
   trackingReplayActiveCueId = null;
-  if (demoSlowPassCount > 0) {
+  const slowPlaylist = takeSlowFollowPlaylist();
+  if (slowPlaylist) {
     selectFollowViewOnly();
-    setReplaySpeed(demoSlowSpeed);
-    trackingReplayViews = Array.from({ length: demoSlowPassCount }, () => 'follow' as QuickViewId);
-    demoSlowPassCount = 0;
+    setReplaySpeed(slowPlaylist.speed);
+    trackingReplayViews = slowPlaylist.views;
   } else {
     trackingReplayViews = selectedReplayViews();
   }
