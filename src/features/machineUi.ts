@@ -32,9 +32,8 @@ import type { ReceiveStanceApi } from './receiveStance';
 //#region 常量/配置
 const MACHINE_NOZZLE_TIP_LOCAL_X = 265;
 const MAX_TRACKED_BALLS = 80;
-/** Lift + slight tilt keep landing discs from z-fighting the table in god view. */
+/** Lift + tube thickness keep landing discs from z-fighting the table in god view. */
 const LANDING_DISC_CLEARANCE_MM = 10;
-const LANDING_DISC_TILT_RAD = THREE.MathUtils.degToRad(6);
 //#endregion
 
 //#region 模型/类型
@@ -446,8 +445,7 @@ function createLandingDiscMarker(radiusMm: number, tubeMm: number, color: number
     polygonOffsetUnits: -2,
   });
   const mesh = new THREE.Mesh(new THREE.TorusGeometry(radiusMm, tubeMm, 10, 40), material);
-  // Flat on the table with a small pitch so overhead (god) views are not coplanar.
-  mesh.rotation.x = -Math.PI / 2 + LANDING_DISC_TILT_RAD;
+  mesh.rotation.x = -Math.PI / 2;
   mesh.visible = false;
   return mesh;
 }
