@@ -25,7 +25,6 @@ import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './tracking
 
 //#region 模型/类型
 export type { FollowOnlyDemoPlayback };
-
 export interface TrackingReplayDeps {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
