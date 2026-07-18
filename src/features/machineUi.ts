@@ -32,6 +32,9 @@ import type { ReceiveStanceApi } from './receiveStance';
 //#region 常量/配置
 const MACHINE_NOZZLE_TIP_LOCAL_X = 265;
 const MAX_TRACKED_BALLS = 80;
+/** Lift + slight tilt keep landing discs from z-fighting the table in god view. */
+const LANDING_DISC_CLEARANCE_MM = 10;
+const LANDING_DISC_TILT_RAD = THREE.MathUtils.degToRad(6);
 //#endregion
 
 //#region 模型/类型
@@ -109,18 +112,8 @@ let machineOnceEl!: HTMLButtonElement;
 let parameterDialog!: HTMLDialogElement;
 
 const currentMachineBallOrigin = new THREE.Vector3(45, 1120, -762.5);
-const targetMarker = new THREE.Mesh(
-  new THREE.RingGeometry(34, 47, 32),
-  new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
-);
-targetMarker.rotation.x = -Math.PI / 2;
-targetMarker.visible = false;
-const firstBounceMarker = new THREE.Mesh(
-  new THREE.RingGeometry(25, 34, 28),
-  new THREE.MeshBasicMaterial({ color: 0x54d6ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
-);
-firstBounceMarker.rotation.x = -Math.PI / 2;
-firstBounceMarker.visible = false;
+const targetMarker = createLandingDiscMarker(40.5, 7, 0xffd166);
+const firstBounceMarker = createLandingDiscMarker(29.5, 5.5, 0x54d6ff);
 const serveTrajectoryLine = new THREE.Line(
   new THREE.BufferGeometry(),
   new THREE.LineDashedMaterial({ color: 0x54d6ff, dashSize: 45, gapSize: 24, transparent: true, opacity: .75 }),
@@ -142,8 +135,8 @@ function syncFlatChoiceGroup(group: HTMLElement): void {
 //#region 公开 API
 export function initMachineUi(machineUiDeps: MachineUiDeps): MachineUiApi {
   deps = machineUiDeps;
-  targetMarker.position.y = deps.TABLE_TOP_Y + 2;
-  firstBounceMarker.position.y = deps.TABLE_TOP_Y + 3;
+  targetMarker.position.y = deps.TABLE_TOP_Y + LANDING_DISC_CLEARANCE_MM;
+  firstBounceMarker.position.y = deps.TABLE_TOP_Y + LANDING_DISC_CLEARANCE_MM + 1;
   currentMachineBallOrigin.set(45, 1120, deps.TABLE_CENTER_Z);
   deps.scene.add(targetMarker, firstBounceMarker, serveTrajectoryLine);
   machineModel = createMachineModel(deps.scene);
@@ -362,7 +355,7 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
     shownImpactCount: 0,
   });
   updateMachinePose(solution);
-  targetMarker.position.set(solution.targetMm.x, deps.TABLE_TOP_Y + 2, solution.targetMm.z);
+  targetMarker.position.set(solution.targetMm.x, deps.TABLE_TOP_Y + LANDING_DISC_CLEARANCE_MM, solution.targetMm.z);
   const isOpeningServe = preset.mode === 'serve';
   targetMarker.visible = !isOpeningServe;
   firstBounceMarker.visible = false;
@@ -373,8 +366,20 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
     const secondImpact = sampledServe.tableImpacts[1];
     firstBounceMarker.visible = Boolean(firstImpact);
     targetMarker.visible = Boolean(secondImpact);
-    if (firstImpact) firstBounceMarker.position.set(firstImpact.x, deps.TABLE_TOP_Y + 3, firstImpact.z);
-    if (secondImpact) targetMarker.position.set(secondImpact.x, deps.TABLE_TOP_Y + 2, secondImpact.z);
+    if (firstImpact) {
+      firstBounceMarker.position.set(
+        firstImpact.x,
+        deps.TABLE_TOP_Y + LANDING_DISC_CLEARANCE_MM + 1,
+        firstImpact.z,
+      );
+    }
+    if (secondImpact) {
+      targetMarker.position.set(
+        secondImpact.x,
+        deps.TABLE_TOP_Y + LANDING_DISC_CLEARANCE_MM,
+        secondImpact.z,
+      );
+    }
     serveTrajectoryLine.geometry.dispose();
     serveTrajectoryLine.geometry = new THREE.BufferGeometry().setFromPoints(
       sampledServe.points.map(point => new THREE.Vector3(point.x, point.y, point.z)),
@@ -429,4 +434,21 @@ function updateMachineOperatingStatus(): void {
 //#endregion
 
 //#region 方法/工具
+function createLandingDiscMarker(radiusMm: number, tubeMm: number, color: number): THREE.Mesh {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.92,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  const mesh = new THREE.Mesh(new THREE.TorusGeometry(radiusMm, tubeMm, 10, 40), material);
+  // Flat on the table with a small pitch so overhead (god) views are not coplanar.
+  mesh.rotation.x = -Math.PI / 2 + LANDING_DISC_TILT_RAD;
+  mesh.visible = false;
+  return mesh;
+}
 //#endregion
