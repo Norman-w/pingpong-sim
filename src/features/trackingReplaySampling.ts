@@ -12,6 +12,8 @@ export interface ReplaySampleFrame {
   position: THREE.Vector3;
   rotation: THREE.Quaternion;
   angularVelocity: THREE.Vector3;
+  stanceMm: THREE.Vector3;
+  lookAtMm: THREE.Vector3;
 }
 //#endregion
 
@@ -34,6 +36,8 @@ export function sampleTrackingReplayFrame(
     position: new THREE.Vector3().lerpVectors(a.position, b.position, replayAlpha),
     rotation: a.rotation.clone().slerp(b.rotation, replayAlpha),
     angularVelocity: new THREE.Vector3().lerpVectors(a.angularVelocity, b.angularVelocity, replayAlpha),
+    stanceMm: new THREE.Vector3().lerpVectors(a.stanceMm, b.stanceMm, replayAlpha),
+    lookAtMm: new THREE.Vector3().lerpVectors(a.lookAtMm, b.lookAtMm, replayAlpha),
   };
 }
 

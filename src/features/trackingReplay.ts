@@ -93,6 +93,8 @@ let trackingReplayExhausted = false;
 let trackingReplayTime = 0;
 let trackingReplaySourceBall: RapierBall | null = null;
 let trackingReplayViews: QuickViewId[] = [];
+/** Per-pass playback speed (1× for leftover "live" slots, slow for teaching). */
+let trackingReplaySpeeds: number[] = [];
 let trackingReplayViewIndex = 0;
 /** Skip the same-frame delta after startReplay so t=0 is actually shown. */
 let trackingReplaySkipNextDelta = false;
@@ -173,10 +175,11 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
       const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
       document.getElementById('tracking-status')!.innerHTML =
         `<strong>已暂停 · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
-        `轨迹冻结；球体旋转按当前角速度继续，便于观察旋转方向与转速。`;
+        `轨迹与脚步冻结；球体旋转按当前角速度继续，便于观察旋转方向与转速。`;
     } else {
       spinBillboard.hide();
-      applyReplayView(controlsCtx());
+      const resumeFrame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
+      applyFollowReplayPose(resumeFrame.stanceMm, resumeFrame.lookAtMm);
     }
   });
   trackingReplayRestartEl.addEventListener('click', () => {
@@ -206,6 +209,19 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
   };
 }
 
+function captureStanceSample(): { stanceMm: THREE.Vector3; lookAtMm: THREE.Vector3 } {
+  return {
+    stanceMm: deps.camera.position.clone(),
+    lookAtMm: deps.controls.target.clone(),
+  };
+}
+
+function applyRecordedStance(stanceMm: THREE.Vector3, lookAtMm: THREE.Vector3): void {
+  deps.camera.position.copy(stanceMm);
+  deps.controls.target.copy(lookAtMm);
+  deps.controls.update();
+}
+
 function beginRecording(ball: RapierBall, now: number): void {
   trackingRecordingStartedAt = now;
   trackingRecordingFinalized = false;
@@ -215,11 +231,14 @@ function beginRecording(ball: RapierBall, now: number): void {
   trackingReplayLaunchOrigin.copy(deps.machineUiApi.currentMachineBallOrigin);
   const rotation = ball.body.rotation();
   const angularVelocity = ball.body.angvel();
+  const stance = captureStanceSample();
   trackingRecording = [{
     time: 0,
     position: trackingReplayLaunchOrigin.clone(),
     rotation: new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
     angularVelocity: new THREE.Vector3(angularVelocity.x, angularVelocity.y, angularVelocity.z),
+    stanceMm: stance.stanceMm,
+    lookAtMm: stance.lookAtMm,
   }];
 }
 
@@ -232,11 +251,14 @@ function recordFrame(now: number, ball: RapierBall): void {
   }
   const position = ball.body.translation();
   const angularVelocity = ball.body.angvel();
+  const stance = captureStanceSample();
   trackingRecording.push({
     time: recordTime,
     position: new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000),
     rotation: ball.mesh.quaternion.clone(),
     angularVelocity: new THREE.Vector3(angularVelocity.x, angularVelocity.y, angularVelocity.z),
+    stanceMm: stance.stanceMm,
+    lookAtMm: stance.lookAtMm,
   });
 }
 
@@ -337,23 +359,41 @@ function startReplay(sourceBall?: RapierBall | null): void {
   const slowPlaylist = takeSlowFollowPlaylist();
   if (slowPlaylist) {
     selectFollowViewOnly();
-    setReplaySpeed(slowPlaylist.speed);
     trackingReplayViews = slowPlaylist.views;
+    trackingReplaySpeeds = slowPlaylist.speeds;
+    setReplaySpeed(slowPlaylist.speeds[0] ?? trackingSpeed);
   } else {
     trackingReplayViews = selectedReplayViews();
+    trackingReplaySpeeds = trackingReplayViews.map(() => trackingSpeed);
   }
   trackingReplayViewIndex = 0;
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   trackingReplayMesh.visible = true;
-  // Stay in the child's receive stance — look toward the machine-side launch, do not teleport.
-  applyReplayView(controlsCtx());
-  deps.controls.target.copy(trackingReplayMesh.position);
-  deps.controls.update();
+  // Follow replay restores this ball's opening footwork — not the live end pose.
+  applyFollowReplayPose(trackingRecording[0].stanceMm, trackingRecording[0].lookAtMm);
   refreshCuePointsUi();
   updateControlButtons(controlsCtx());
   deps.machineUiApi.updateMachineOperatingStatus();
   deps.syncWindowIndicators();
+}
+
+function applyFollowReplayPose(stanceMm: THREE.Vector3, lookAtMm: THREE.Vector3): void {
+  const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
+  if (view === 'follow') {
+    deps.receiveStance.setQuickViewActive('follow');
+    applyRecordedStance(stanceMm, lookAtMm);
+    const followOnly = trackingReplayViews.every(item => item === 'follow');
+    const passLabel = trackingSpeed >= 0.99 ? '满速复现' : '慢放跟球';
+    // +1: the live feed already played; this index is among the replay playlist.
+    const cyclePass = trackingReplayViewIndex + 2;
+    const cycleTotal = trackingReplayViews.length + 1;
+    document.getElementById('tracking-status')!.innerHTML =
+      `<strong>${followOnly ? passLabel : '慢放回看'} · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
+      `第 ${cyclePass}/${cycleTotal} 遍 · ${followOnly ? '同球轨迹+脚步' : '视角'}；与首遍实录完全一致。`;
+    return;
+  }
+  applyReplayView(controlsCtx());
 }
 
 function updateReplay(deltaSeconds: number): void {
@@ -362,7 +402,8 @@ function updateReplay(deltaSeconds: number): void {
   if (trackingReplayPaused) {
     const pausedFrame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
     advanceTrackingReplaySpin(trackingReplayMesh, pausedFrame.angularVelocity, deltaSeconds, trackingSpeed);
-    if (followView) deps.controls.target.copy(trackingReplayMesh.position);
+    trackingReplayMesh.position.copy(pausedFrame.position);
+    if (followView) applyRecordedStance(pausedFrame.stanceMm, pausedFrame.lookAtMm);
     else {
       updateHighArcFraming({
         camera: deps.camera, controls: deps.controls, ballMm: trackingReplayMesh.position, deltaSeconds,
@@ -372,8 +413,9 @@ function updateReplay(deltaSeconds: number): void {
   }
   if (trackingReplaySkipNextDelta) {
     trackingReplaySkipNextDelta = false;
-    trackingReplayMesh.position.copy(trackingRecording[0].position);
-    if (followView) deps.controls.target.copy(trackingReplayMesh.position);
+    const launchFrame = sampleTrackingReplayFrame(trackingRecording, 0);
+    trackingReplayMesh.position.copy(launchFrame.position);
+    if (followView) applyRecordedStance(launchFrame.stanceMm, launchFrame.lookAtMm);
     return;
   }
   trackingReplayTime += deltaSeconds * trackingSpeed;
@@ -385,7 +427,8 @@ function updateReplay(deltaSeconds: number): void {
   advanceTrackingReplaySpin(trackingReplayMesh, frame.angularVelocity, deltaSeconds, trackingSpeed);
   syncCueHighlight(controlsCtx(), trackingReplayTime);
   if (followView) {
-    deps.controls.target.lerp(trackingReplayMesh.position, 1 - Math.exp(-12 * deltaSeconds));
+    // Time-synced footwork: camera pose follows the recorded stance track.
+    applyRecordedStance(frame.stanceMm, frame.lookAtMm);
   } else {
     updateHighArcFraming({
       camera: deps.camera, controls: deps.controls, ballMm: trackingReplayMesh.position, deltaSeconds,
@@ -397,11 +440,11 @@ function updateReplay(deltaSeconds: number): void {
     trackingReplayTime = 0;
     trackingReplayActiveCueId = null;
     trackingReplaySkipNextDelta = true;
+    const nextSpeed = trackingReplaySpeeds[trackingReplayViewIndex];
+    if (nextSpeed != null) setReplaySpeed(nextSpeed);
     trackingReplayMesh.position.copy(trackingRecording[0].position);
     trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
-    applyReplayView(controlsCtx());
-    deps.controls.target.copy(trackingReplayMesh.position);
-    deps.controls.update();
+    applyFollowReplayPose(trackingRecording[0].stanceMm, trackingRecording[0].lookAtMm);
     highlightCues(controlsCtx());
     return;
   }
@@ -415,15 +458,15 @@ function restartTrackingReplayPlayback(): void {
   trackingReplayTime = 0;
   trackingReplayActiveCueId = null;
   trackingReplaySkipNextDelta = true;
-  trackingReplayViews = selectedReplayViews();
+  // Keep the active playlist so restart does not drop full-speed / slow slots.
   trackingReplayViewIndex = 0;
+  const restartSpeed = trackingReplaySpeeds[0];
+  if (restartSpeed != null) setReplaySpeed(restartSpeed);
   snapRecordingLaunchToOrigin(trackingRecording, trackingReplayLaunchOrigin);
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   spinBillboard.hide();
-  applyReplayView(controlsCtx());
-  deps.controls.target.copy(trackingReplayMesh.position);
-  deps.controls.update();
+  applyFollowReplayPose(trackingRecording[0].stanceMm, trackingRecording[0].lookAtMm);
   highlightCues(controlsCtx());
   updateControlButtons(controlsCtx());
 }
@@ -453,11 +496,11 @@ function finishTrackingReplayCycle(): void {
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   spinBillboard.hide();
-  applyReplayView(controlsCtx());
+  applyFollowReplayPose(trackingRecording[0].stanceMm, trackingRecording[0].lookAtMm);
   highlightCues(controlsCtx());
   updateControlButtons(controlsCtx());
   document.getElementById('tracking-status')!.innerHTML =
-    `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}×`;
+    `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}× · 已回到本球开局站位`;
 }
 //#endregion
 

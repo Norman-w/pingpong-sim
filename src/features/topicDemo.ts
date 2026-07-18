@@ -233,7 +233,7 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   randomizeEl.checked = id === 'child-lob';
   deps.trackingDemo.setContinuousChecked(false);
   if (id === 'child-lob') {
-    // Continuous full-table targets: each cycle = live follow ×2 + slow follow ×2.
+    // Each cycle: 1 live feed (record) + 1× full-speed replay + 2× slow — same trajectory.
     deps.machineUiApi.rollAndLockLobDemoTarget();
     deps.machineUiApi.setBallStyle('white-yellow-eight');
     deps.trackingReplay.configureFollowOnlyDemoPlayback({

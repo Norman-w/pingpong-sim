@@ -258,9 +258,9 @@ export function solveLaunch(
     : (preset.targetDepthMm + (preset.mode === 'serve' ? 0 : rallyDepthBiasMm(settings.playerLevel))) / 1000 +
       (settings.randomize ? centeredNoise(random) * preset.spreadMm * level.accuracyScale / 1000 : 0);
   let targetZ = randomTargetZ(settings, preset.spreadMm, level.accuracyScale, random);
-  // Full receiver half: just past the net through near the end line.
+  // Mid-to-deep receiver half — avoid ultra-short soft landings that double-bounce on table.
   if (preset.id === 'lob') {
-    targetX = Math.max(1.52, Math.min(2.62, targetX));
+    targetX = Math.max(1.85, Math.min(2.68, targetX));
   }
   if (preset.mode === 'serve') {
     // A legal table-tennis serve first descends onto the server's half, then

@@ -287,7 +287,8 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
 
 function launchNextTrackingBall(restoreFollowView = false): void {
   if (!trackingEnabled) return;
-  deps.receiveStance.resetAutomaticStance();
+  // Reset feet to this ball's opening stance so live + replay both start there.
+  deps.receiveStance.resetAutomaticStance(true);
   const useFollowCamera = restoreFollowView && !deps.receiveStance.hasLockedQuickView();
   if (useFollowCamera) deps.receiveStance.applyViewPreset();
   deps.receiveStance.updateContactGuide(true);

@@ -49,8 +49,12 @@ export function applyTrackingReplayView(ctx: ReplayControlsCtx): void {
   const views = ctx.getViews();
   const view = views[ctx.getViewIndex()] ?? 'follow';
   if (view === 'follow') {
-    ctx.receiveStance.applyViewPreset();
-    ctx.controls.target.copy(ctx.trackingReplayMesh.position);
+    // Do not applyViewPreset here — that snaps to the live end pose.
+    // Follow footwork is driven by recorded stanceMm/lookAtMm in updateReplay.
+    const frame = sampleTrackingReplayFrame(ctx.getRecording(), ctx.getReplayTime());
+    ctx.receiveStance.setQuickViewActive('follow');
+    ctx.camera.position.copy(frame.stanceMm);
+    ctx.controls.target.copy(frame.lookAtMm);
   } else {
     const preset = ctx.receiveStance.quickViews[view];
     ctx.camera.fov = 45;
@@ -65,7 +69,7 @@ export function applyTrackingReplayView(ctx: ReplayControlsCtx): void {
   const followOnly = views.every(item => item === 'follow');
   document.getElementById('tracking-status')!.innerHTML =
     `<strong>${followOnly ? '慢放跟球' : '慢放回看'} · ${ctx.replayViewLabel(view)}</strong> · 速度 ${ctx.getSpeed().toFixed(2)}×<br>` +
-    `${followOnly ? '跟球视角' : '视角'} ${ctx.getViewIndex() + 1}/${views.length}；球体位置与旋转均按实录复现。`;
+    `${followOnly ? '跟球+脚步' : '视角'} ${ctx.getViewIndex() + 1}/${views.length}；球体与站位均按实录时间轴复现。`;
 }
 
 export function updateReplayControlButtons(ctx: ReplayControlsCtx): void {
@@ -99,7 +103,11 @@ export function seekTrackingReplayCue(ctx: ReplayControlsCtx, cue: ReplayCuePoin
   const frame = sampleTrackingReplayFrame(ctx.getRecording(), ctx.getReplayTime());
   ctx.trackingReplayMesh.position.copy(frame.position);
   ctx.trackingReplayMesh.quaternion.copy(frame.rotation);
-  if (ctx.receiveStance.activeQuickView === 'follow') ctx.controls.target.copy(ctx.trackingReplayMesh.position);
+  if ((ctx.getViews()[ctx.getViewIndex()] ?? 'follow') === 'follow') {
+    ctx.camera.position.copy(frame.stanceMm);
+    ctx.controls.target.copy(frame.lookAtMm);
+    ctx.controls.update();
+  }
   highlightReplayCueButtons(ctx);
   updateReplayControlButtons(ctx);
   ctx.spinBillboard.show(cue.label, frame.angularVelocity, ctx.trackingReplayMesh.position);

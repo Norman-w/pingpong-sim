@@ -116,7 +116,7 @@ trackingReplayApi = initTrackingReplay({
   onAutoReplayDisabled: () => trackingDemoApi.resumeContinuousIfActive(),
   onReplayStateChanged: () => trackingDemoApi.updateControlState(),
   onContinuousFollowDemoCycle: () => {
-    // Next full-table lob target, then the same live×2 + slow×2 follow playlist.
+    // Next full-table lob target, then 1 live + 1× full-speed replay + 2× slow.
     machineUiApi.discardBallsExcept(null);
     machineUiApi.rollAndLockLobDemoTarget();
     trackingDemoApi.launchNextLiveDemoBall();

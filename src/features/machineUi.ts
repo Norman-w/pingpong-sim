@@ -36,8 +36,9 @@ const MAX_TRACKED_BALLS = 80;
 /** Lift + tube thickness keep landing discs from z-fighting the table in god view. */
 const LANDING_DISC_CLEARANCE_MM = 10;
 /** Full receiver-half lob band (mm): just past net ↔ near end line. */
-const LOB_DEMO_DEPTH_MIN_MM = 1520;
-const LOB_DEMO_DEPTH_MAX_MM = 2620;
+/** Mid-to-deep first bounce: short soft landings leave a second bounce on table. */
+const LOB_DEMO_DEPTH_MIN_MM = 1850;
+const LOB_DEMO_DEPTH_MAX_MM = 2680;
 //#endregion
 
 //#region 模型/类型

@@ -46,6 +46,10 @@ export interface TrackingSnapshot {
   position: THREE.Vector3;
   rotation: THREE.Quaternion;
   angularVelocity: THREE.Vector3;
+  /** Child/receiver camera (eye) pose at this sample — for footwork replay. */
+  stanceMm: THREE.Vector3;
+  /** Look-at target (OrbitControls) at this sample. */
+  lookAtMm: THREE.Vector3;
 }
 
 export type IncomingSourceKind = 'machine' | 'opponent-contact';

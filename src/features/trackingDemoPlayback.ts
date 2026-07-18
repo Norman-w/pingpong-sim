@@ -18,6 +18,12 @@ export interface FollowOnlyDemoPlayback {
 }
 
 export type LiveDemoPassAction = 'continue-live' | 'start-replay' | 'none';
+
+/** Follow playlist after the first recorded live ball (full-speed leftovers + slow). */
+export interface FollowReplayPlaylist {
+  views: QuickViewId[];
+  speeds: number[];
+}
 //#endregion
 
 //#region 私有成员
@@ -58,17 +64,28 @@ export function consumeLiveDemoPass(): LiveDemoPassAction {
     return demoSlowPassCount > 0 ? 'start-replay' : 'none';
   }
   demoLivePassesRemaining -= 1;
-  if (demoLivePassesRemaining > 0) return 'continue-live';
-  return demoSlowPassCount > 0 ? 'start-replay' : 'none';
+  // Only the first live is a real feed. Remaining "live" passes replay that
+  // same recording at 1× so ball path and footwork stay identical across the cycle.
+  if (demoLivePassesRemaining > 0 || demoSlowPassCount > 0) return 'start-replay';
+  return 'none';
 }
 
-/** Build and consume the slow follow-only playlist for startReplay, or null if none. */
-export function takeSlowFollowPlaylist(): { views: QuickViewId[]; speed: number } | null {
-  if (demoSlowPassCount <= 0) return null;
-  const views = Array.from({ length: demoSlowPassCount }, () => 'follow' as QuickViewId);
-  const speed = demoSlowSpeed;
+/** Build playlist after the recorded live ball: leftover lives at 1×, then slow passes. */
+export function takeSlowFollowPlaylist(): FollowReplayPlaylist | null {
+  const fullSpeedCount = Math.max(0, demoLivePassesRemaining);
+  const slowCount = Math.max(0, demoSlowPassCount);
+  if (fullSpeedCount <= 0 && slowCount <= 0) return null;
+  const views: QuickViewId[] = [
+    ...Array.from({ length: fullSpeedCount }, () => 'follow' as QuickViewId),
+    ...Array.from({ length: slowCount }, () => 'follow' as QuickViewId),
+  ];
+  const speeds = [
+    ...Array.from({ length: fullSpeedCount }, () => 1),
+    ...Array.from({ length: slowCount }, () => demoSlowSpeed),
+  ];
+  demoLivePassesRemaining = 0;
   demoSlowPassCount = 0;
-  return { views, speed };
+  return { views, speeds };
 }
 
 export function isContinuousFollowDemo(): boolean {

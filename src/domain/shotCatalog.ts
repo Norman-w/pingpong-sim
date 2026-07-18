@@ -147,9 +147,9 @@ export const SHOT_PRESETS: readonly ShotPreset[] = [
   { id: 'float-long', name: '无旋长球', category: '基础球', description: '中速长落点，轨迹最接近纯抛体基准。', speedMps: 6.5, topRpm: 0, sideRpm: 0, corkRpm: 0, targetDepthMm: 2480, launchHeightMm: 1120, cadence: 1.2, spreadMm: 45, color: orange, shortcut: '2' },
   { id: 'drive', name: '平击快攻', category: '基础球', description: '速度优先、旋转较少的快速进攻球。', speedMps: 9.0, topRpm: 900, sideRpm: 0, corkRpm: 0, targetDepthMm: 2420, launchHeightMm: 1190, cadence: 1.3, spreadMm: 55, color: orange, shortcut: '3' },
   // Depth centers mid-near; with randomize/spread (and demo override) some land
-  // nearer, some deeper — too-near shorts tend to leave a second bounce on table.
-  // Horizontal ~3.2 m/s; mouth height ~robot nozzle — arc height comes from vy.
-  { id: 'lob', name: '高吊球', category: '基础球', description: '高弧线、低速度，落点可近可远；落台后起跳点常深入台内。', speedMps: 3.2, topRpm: 700, sideRpm: 0, corkRpm: 0, targetDepthMm: 2050, launchHeightMm: 1120, cadence: 0.75, spreadMm: 200, color: orange },
+  // nearer, some deeper. Horizontal speed must reach deep first-bounce targets;
+  // too-soft lobs leave a second bounce on the table. Mild topspin adds end-line carry.
+  { id: 'lob', name: '高吊球', category: '基础球', description: '高弧线、中低速，落点偏中深；一跳后前冲出台，便于高点扣杀。', speedMps: 4.8, topRpm: 1600, sideRpm: 0, corkRpm: 0, targetDepthMm: 2300, launchHeightMm: 1120, cadence: 0.75, spreadMm: 160, color: orange },
 
   { id: 'top-light', name: '轻上旋', category: '上旋进攻', description: '温和下扎，落台后轻微前冲。', speedMps: 5.5, topRpm: 1800, sideRpm: 0, corkRpm: 0, targetDepthMm: 2180, launchHeightMm: 1140, cadence: 1.3, spreadMm: 45, color: red, shortcut: '4' },
   { id: 'top-drive', name: '上旋快带', category: '上旋进攻', description: '较平、较快的连续上旋来球。', speedMps: 8.0, topRpm: 3200, sideRpm: 0, corkRpm: 0, targetDepthMm: 2350, launchHeightMm: 1190, cadence: 1.6, spreadMm: 55, color: red },

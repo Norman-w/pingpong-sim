@@ -87,7 +87,6 @@ export function runTrackingDemoFrame(
   const position = session.ball.body.translation();
   const velocity = session.ball.body.linvel();
   const ballPoint = new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000);
-  deps.trackingReplay.recordFrame(now, session.ball);
   appendTrackingTrail(deps, ballPoint);
 
   const elapsedInPhase = now - session.phaseStartedAt;
@@ -169,10 +168,6 @@ export function runTrackingDemoFrame(
     }
   }
 
-  if (!deps.trackingReplay.isRecordingFinalized() && session.phase === 'contact-hold') {
-    deps.trackingReplay.finalizeRecording();
-  }
-
   session.previousVy = velocity.y;
   if (deps.receiveStance.hasLockedQuickView()) {
     updateHighArcFraming({
@@ -181,14 +176,28 @@ export function runTrackingDemoFrame(
       ballMm: ballPoint,
       deltaSeconds,
     });
-    return;
-  }
-  if (session.phase === 'post-contact-source') {
+    // Record after framing so stance/look match this ball sample.
+    if (!deps.trackingReplay.isRecordingFinalized()) {
+      deps.trackingReplay.recordFrame(now, session.ball);
+    }
+  } else if (session.phase === 'post-contact-source') {
     ctx.turnViewAtHumanSpeed(trackingTarget, deltaSeconds);
+    if (!deps.trackingReplay.isRecordingFinalized()) {
+      deps.trackingReplay.recordFrame(now, session.ball);
+    }
   } else {
     const isLobFollow = deps.machineUiApi.activePreset.id === 'lob' || session.lobPreferWindowB;
     const followRate = session.phase === 'contact-hold' ? 0.22 : isLobFollow ? 0.45 : 0.30;
     deps.controls.target.lerp(trackingTarget, followRate);
+    // Capture feet + gaze after this frame's footwork and look-at updates.
+    if (!deps.trackingReplay.isRecordingFinalized()) {
+      deps.trackingReplay.recordFrame(now, session.ball);
+    }
+  }
+
+  // Finalize after the contact-hold sample is written so replay includes contact pose.
+  if (!deps.trackingReplay.isRecordingFinalized() && session.phase === 'contact-hold') {
+    deps.trackingReplay.finalizeRecording();
   }
 }
 //#endregion

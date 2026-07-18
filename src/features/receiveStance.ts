@@ -293,12 +293,14 @@ function applyDemoObserverSetup(scenario?: { eyeHeightMm: number; stance: ViewSt
 function applyQuickView(id: QuickViewId): void {
   const deps = receiveStanceDeps;
   if (id === 'follow') {
-    applyViewPreset();
     const replayMesh = deps.getTrackingReplayMesh();
     if (deps.isTrackingReplayMode() && replayMesh.visible) {
-      deps.controls.target.copy(replayMesh.position);
-      deps.controls.update();
+      // Keep the recorded footwork track — do not snap to the live end stance.
+      setQuickViewActive('follow');
+      contactGuideApi.updateContactGuide();
+      return;
     }
+    applyViewPreset();
     contactGuideApi.updateContactGuide();
     return;
   }
