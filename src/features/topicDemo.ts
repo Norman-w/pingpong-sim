@@ -232,7 +232,16 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   laneEl.value = scenario.lane;
   randomizeEl.checked = false;
   deps.trackingDemo.setContinuousChecked(false);
-  deps.trackingReplay.enableAutoReplayForDemo();
+  if (id === 'child-lob') {
+    // Live follow ×2 at normal speed, then slow follow-only replay ×2 — no other cameras.
+    deps.trackingReplay.configureFollowOnlyDemoPlayback({
+      livePasses: 2,
+      slowPasses: 2,
+      slowSpeed: 0.2,
+    });
+  } else {
+    deps.trackingReplay.enableAutoReplayForDemo();
+  }
   deps.machineUiApi.setActivePreset(getPreset(scenario.presetId), false);
   deps.receiveStance.contactTechnique = deps.receiveStance.preferTechniqueForPreset(deps.machineUiApi.activePreset);
   deps.receiveStance.updateTechniqueOptions();

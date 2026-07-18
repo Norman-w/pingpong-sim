@@ -12,7 +12,9 @@ import type { MachineUiApi } from './machineUi';
 //#endregion
 
 //#region 常量/配置
+const DEFAULT_DEMO_SLOW_SPEED = 0.2;
 //#endregion
+
 //#region 模型/类型
 export interface TrackingReplayDeps {
   scene: THREE.Scene;
@@ -28,6 +30,12 @@ export interface TrackingReplayDeps {
   onReplayStateChanged: () => void;
 }
 
+export interface FollowOnlyDemoPlayback {
+  livePasses: number;
+  slowPasses: number;
+  slowSpeed?: number;
+}
+
 export interface TrackingReplayApi {
   beginRecording: (ball: RapierBall, now: number) => void;
   recordFrame: (now: number, ball: RapierBall) => void;
@@ -39,6 +47,11 @@ export interface TrackingReplayApi {
   updateReplay: (deltaSeconds: number) => void;
   refreshCuePointsUi: () => void;
   enableAutoReplayForDemo: () => void;
+  /** Child-lob style: N live follow passes, then M slow follow-only replays. */
+  configureFollowOnlyDemoPlayback: (plan: FollowOnlyDemoPlayback) => void;
+  clearDemoPlaybackPlan: () => void;
+  /** After a live rally ends: another live feed, start slow playlist, or no demo plan. */
+  consumeLiveDemoPass: () => 'continue-live' | 'start-replay' | 'none';
   isAutoReplayEnabled: () => boolean;
   syncAutoReplayFromCheckbox: () => void;
   isReplayMode: () => boolean;
@@ -77,10 +90,28 @@ let trackingReplayActiveCueId: ReplayCuePoint['id'] | null = null;
 let trackingReplayMesh!: THREE.Mesh;
 let spinBillboard!: SpinBillboardApi;
 
+/** Remaining live follow passes including the ball currently in flight. */
+let demoLivePassesRemaining = 0;
+let demoSlowPassCount = 0;
+let demoSlowSpeed = DEFAULT_DEMO_SLOW_SPEED;
+let demoLivePassTotal = 0;
+
 function selectedReplayViews(): QuickViewId[] {
   const selected = Array.from(document.querySelectorAll<HTMLInputElement>('[data-replay-view]:checked'))
     .map(input => input.dataset.replayView as QuickViewId);
   return selected.length > 0 ? selected : ['follow'];
+}
+
+function setReplaySpeed(speed: number): void {
+  trackingSpeed = THREE.MathUtils.clamp(speed, 0.05, 1);
+  trackingSpeedEl.value = String(trackingSpeed);
+  trackingSpeedValueEl.textContent = `${trackingSpeed.toFixed(2)}×`;
+}
+
+function selectFollowViewOnly(): void {
+  document.querySelectorAll<HTMLInputElement>('[data-replay-view]').forEach(input => {
+    input.checked = input.dataset.replayView === 'follow';
+  });
 }
 
 function replayViewLabel(view: QuickViewId): string {
@@ -153,6 +184,9 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
     updateReplay,
     refreshCuePointsUi,
     enableAutoReplayForDemo,
+    configureFollowOnlyDemoPlayback,
+    clearDemoPlaybackPlan,
+    consumeLiveDemoPass,
     isAutoReplayEnabled: () => trackingAutoReplay,
     syncAutoReplayFromCheckbox: () => { trackingAutoReplay = trackingReplayEl.checked; },
     isReplayMode: () => trackingReplayMode,
@@ -205,11 +239,41 @@ function advanceRecordingClockBy(pausedMs: number): void {
 }
 
 function enableAutoReplayForDemo(): void {
+  clearDemoPlaybackPlan();
   document.querySelectorAll<HTMLInputElement>('[data-replay-view]').forEach(input => {
     input.checked = true;
   });
   trackingReplayEl.checked = true;
   trackingAutoReplay = true;
+  deps.onAutoReplayEnabled();
+}
+
+function configureFollowOnlyDemoPlayback(plan: FollowOnlyDemoPlayback): void {
+  demoLivePassTotal = Math.max(1, Math.floor(plan.livePasses));
+  demoLivePassesRemaining = demoLivePassTotal;
+  demoSlowPassCount = Math.max(0, Math.floor(plan.slowPasses));
+  demoSlowSpeed = plan.slowSpeed ?? DEFAULT_DEMO_SLOW_SPEED;
+  selectFollowViewOnly();
+  trackingReplayEl.checked = true;
+  trackingAutoReplay = true;
+  setReplaySpeed(demoSlowSpeed);
+  deps.onAutoReplayEnabled();
+}
+
+function clearDemoPlaybackPlan(): void {
+  demoLivePassesRemaining = 0;
+  demoSlowPassCount = 0;
+  demoLivePassTotal = 0;
+}
+
+function consumeLiveDemoPass(): 'continue-live' | 'start-replay' | 'none' {
+  if (demoLivePassesRemaining <= 0 && demoSlowPassCount <= 0) return 'none';
+  if (demoLivePassesRemaining <= 0) {
+    return demoSlowPassCount > 0 ? 'start-replay' : 'none';
+  }
+  demoLivePassesRemaining -= 1;
+  if (demoLivePassesRemaining > 0) return 'continue-live';
+  return demoSlowPassCount > 0 ? 'start-replay' : 'none';
 }
 
 function refreshCuePointsUi(): void {
@@ -270,7 +334,14 @@ function startReplay(sourceBall: RapierBall): void {
   trackingReplayExhausted = false;
   trackingReplayTime = 0;
   trackingReplayActiveCueId = null;
-  trackingReplayViews = selectedReplayViews();
+  if (demoSlowPassCount > 0) {
+    selectFollowViewOnly();
+    setReplaySpeed(demoSlowSpeed);
+    trackingReplayViews = Array.from({ length: demoSlowPassCount }, () => 'follow' as QuickViewId);
+    demoSlowPassCount = 0;
+  } else {
+    trackingReplayViews = selectedReplayViews();
+  }
   trackingReplayViewIndex = 0;
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
@@ -356,9 +427,10 @@ function applyTrackingReplayView(): void {
   }
   deps.controls.enabled = true;
   deps.controls.update();
+  const followOnlyPlaylist = trackingReplayViews.every(item => item === 'follow');
   document.getElementById('tracking-status')!.innerHTML =
-    `<strong>慢放回看 · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
-    `视角 ${trackingReplayViewIndex + 1}/${trackingReplayViews.length}；球体位置与旋转均按实录复现。`;
+    `<strong>${followOnlyPlaylist ? '慢放跟球' : '慢放回看'} · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
+    `${followOnlyPlaylist ? '跟球视角' : '视角'} ${trackingReplayViewIndex + 1}/${trackingReplayViews.length}；球体位置与旋转均按实录复现。`;
 }
 
 function updateReplayControlButtons(): void {

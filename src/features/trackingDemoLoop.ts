@@ -46,6 +46,7 @@ export interface TrackingDemoLoopContext {
   stopTrackingDemo: () => void;
   beginTrackingBall: (ball: RapierBall, now: number, snapCamera: boolean, skipSourceGlance: boolean) => void;
   clearTrackingSession: () => void;
+  launchNextLiveDemoBall: () => void;
 }
 //#endregion
 
@@ -121,7 +122,16 @@ export function runTrackingDemoFrame(
   });
 
   if (session.phase === 'post-contact-source' && elapsedInPhase > 420) {
-    if (deps.trackingReplay.isAutoReplayEnabled() && deps.trackingReplay.isRecordingFinalized()) {
+    const demoAction = deps.trackingReplay.consumeLiveDemoPass();
+    if (demoAction === 'continue-live') {
+      ctx.clearTrackingSession();
+      ctx.launchNextLiveDemoBall();
+      return;
+    }
+    if (
+      demoAction === 'start-replay' ||
+      (deps.trackingReplay.isAutoReplayEnabled() && deps.trackingReplay.isRecordingFinalized())
+    ) {
       ctx.clearTrackingSession();
       deps.trackingReplay.startReplay(session.ball);
       return;

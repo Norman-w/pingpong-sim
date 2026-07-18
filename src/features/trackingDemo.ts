@@ -143,6 +143,7 @@ export function initTrackingDemo(trackingDemoDeps: TrackingDemoDeps): TrackingDe
     stopTrackingDemo,
     beginTrackingBall,
     clearTrackingSession: () => { trackingSession = null; },
+    launchNextLiveDemoBall: () => { launchNextTrackingBall(true); },
   };
 
   trackingStartEl = document.getElementById('tracking-start') as HTMLButtonElement;
@@ -195,6 +196,7 @@ function advanceClocksBy(pausedMs: number): void {
 }
 
 function stopTrackingDemo(resetStatus = true): void {
+  deps.trackingReplay.clearDemoPlaybackPlan();
   deps.trackingReplay.stopReplay();
   deps.receiveStance.clearReceiveFailureFeedback();
   deps.receiveStance.clearMissedPreferredMarker();
