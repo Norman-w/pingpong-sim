@@ -1,7 +1,7 @@
 //#region 导入/依赖
 import * as THREE from 'three';
 import type { RapierBall } from '../physics';
-import { clampWindowPosition, setWindowOpen } from '../ui/windowManager';
+import { clampWindowPosition, closeAllUiPopups } from '../ui/windowManager';
 import {
   getPreset,
   sampleTrajectory,
@@ -223,6 +223,7 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   if (variant === 'child-lob-adult' || variant === 'child-triangle-adult') scenario.eyeHeightMm = 1600;
   if (variant === 'stance-high') scenario.eyeHeightMm = 1800;
 
+  closeAllUiPopups();
   deps.trackingDemo.stopTrackingDemo(false);
   deps.machineUiApi.setMachineRunning(false);
   strengthEl.value = String(scenario.strength);
@@ -242,14 +243,16 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   deps.receiveStance.updateContactGuide(false);
 
   await deps.trackingDemo.startTrackingDemo();
+  // startTrackingDemo / attach paths may reopen panels — keep the stage clear.
+  closeAllUiPopups();
   demoActive = true;
   setActiveDemoItem(id);
-  setWindowOpen('tracking-window', true);
   deps.syncWindowIndicators();
 }
 
 async function fireDemo(): Promise<void> {
   // Use the current sliders as-is. Unmodified controls already hold the topic defaults.
+  closeAllUiPopups();
   await deps.clearBalls();
   deps.machineUiApi.setMachineRunning(false);
   deps.machineUiApi.setActivePreset(getPreset('loop-spin'), false);
@@ -271,6 +274,7 @@ async function fireDemo(): Promise<void> {
     if (i === 1) trackedBall = ball;
   });
   if (trackedBall) deps.trackingDemo.attachBallToTracking(trackedBall);
+  closeAllUiPopups();
   setActiveDemoItem('topspin');
   deps.syncWindowIndicators();
 }

@@ -107,6 +107,17 @@ export function setWindowOpen(id: WindowId, open: boolean): void {
   }
 }
 
+/** Close every floating UI window and any open HTML dialog (topic demos want a clear view). */
+export function closeAllUiPopups(): void {
+  for (const id of WINDOW_IDS) {
+    const windowEl = document.getElementById(id);
+    windowEl?.classList.add('is-closed');
+    document.querySelector<HTMLButtonElement>(`[data-window-toggle="${id}"]`)?.classList.remove('is-open');
+  }
+  document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(dialog => dialog.close());
+  saveWindowPreferences();
+}
+
 export function clampWindowPosition(windowEl: HTMLElement, left: number, top: number): void {
   const width = windowEl.offsetWidth || windowEl.getBoundingClientRect().width;
   const height = windowEl.offsetHeight || windowEl.getBoundingClientRect().height;
