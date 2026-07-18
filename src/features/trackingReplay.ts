@@ -9,24 +9,13 @@ import type { TrackingSnapshot } from './trackingTypes';
 import type { QuickViewId, ReceiveStanceApi } from './receiveStance';
 import type { MachineUiApi } from './machineUi';
 import {
-  clearDemoPlaybackPlan,
+  beginNextContinuousDemoCycle, clearDemoPlaybackPlan, consumeLiveDemoPass,
   configureFollowOnlyDemoPlayback as applyFollowOnlyDemoPlayback,
-  consumeLiveDemoPass,
-  selectFollowViewOnly,
-  setReplaySpeedUi,
-  takeSlowFollowPlaylist,
-  isContinuousFollowDemo,
-  beginNextContinuousDemoCycle,
+  isContinuousFollowDemo, selectFollowViewOnly, setReplaySpeedUi, takeSlowFollowPlaylist,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
-import {
-  activeReplayCueIdAt,
-  advanceTrackingReplaySpin,
-  sampleTrackingReplayFrame,
-} from './trackingReplaySampling';
-
+import { activeReplayCueIdAt, advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
 //#endregion
-
 //#region 模型/类型
 export type { FollowOnlyDemoPlayback };
 export interface TrackingReplayDeps {
@@ -494,12 +483,9 @@ function finishTrackingReplayCycle(): void {
 }
 
 function syncReplayCueHighlightForTime(time: number): void {
-  let active: ReplayCuePoint | null = null;
-  for (const cue of trackingReplayCuePoints) {
-    if (cue.time <= time + 1e-3) active = cue;
-  }
-  if (active?.id === trackingReplayActiveCueId) return;
-  trackingReplayActiveCueId = active?.id ?? null;
+  const nextId = activeReplayCueIdAt(trackingReplayCuePoints, time) as ReplayCuePoint['id'] | null;
+  if (nextId === trackingReplayActiveCueId) return;
+  trackingReplayActiveCueId = nextId;
   highlightReplayCueButtons();
 }
 //#endregion
