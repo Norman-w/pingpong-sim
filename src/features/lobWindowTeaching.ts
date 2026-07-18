@@ -118,13 +118,39 @@ export function initLobWindowTeaching(teachingDeps: LobWindowTeachingDeps): {
     isLobPreset: boolean,
     receiveBounceCount: number,
   ) => void;
+  canReachLobContact: (
+    ballPoint: THREE.Vector3,
+    remainingSeconds: number,
+    allowJump: boolean,
+  ) => boolean;
   currentStandingContactYMm: () => number;
 } {
   deps = teachingDeps;
   return {
     updateLobWindowATeaching,
+    canReachLobContact,
     currentStandingContactYMm: () => currentModel().standingContactYMm,
   };
+}
+
+/** Live fan+height(+footwork) check used to gate window-A smash contact. */
+function canReachLobContact(
+  ballPoint: THREE.Vector3,
+  remainingSeconds: number,
+  allowJump: boolean,
+): boolean {
+  const model = currentModel();
+  const stance = deps.receiveStance.effectiveStancePose();
+  return canReachContact({
+    stance: { x: stance.x, z: stance.z },
+    stanceFootX: deps.camera.position.x,
+    stanceFootZ: deps.camera.position.z,
+    ball: { x: ballPoint.x, y: ballPoint.y, z: ballPoint.z },
+    model,
+    remainingSeconds: Math.max(0.05, remainingSeconds),
+    allowJump,
+    autoFootwork: deps.receiveStance.stanceMode === 'auto',
+  });
 }
 
 export function createLobSessionFields(): Pick<

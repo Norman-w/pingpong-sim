@@ -8,6 +8,7 @@ import {
   TABLE_TECHNIQUES,
   receivePreparationMs,
 } from '../domain/contactRules';
+import { secondsToApex } from '../domain/lobProcessability';
 import { updateHighArcFraming } from '../highArcFraming';
 import type { IncomingSource, TrackingSession } from './trackingTypes';
 import type { ReceiveStanceApi } from './receiveStance';
@@ -344,6 +345,17 @@ function resolveFollowContact(
     velocity.y <= 0 &&
     ballPoint.y <= lobTeaching.currentStandingContactYMm() + 40
   );
+  // Window A cyan guide sits on the live ball — X-plane alone would always
+  // "contact". Smash only counts if the early preferred near-net point is in
+  // the reach fan; a ball that later drifts closer must not count as "够到了".
+  const inLobWindowA = session.lobEnteredWindowA && !session.lobPreferWindowB;
+  if (inLobWindowA && reachedContactPlane && hasRequiredBounce) {
+    const preferred = session.lobWindowAPoint ?? ballPoint;
+    const secondsLeft = Math.max(0.05, secondsToApex(velocity.y));
+    if (!lobTeaching.canReachLobContact(preferred, secondsLeft, true)) {
+      return;
+    }
+  }
 
   if (reachedContactPlane && hasRequiredBounce && windowBReady) {
     session.phase = 'contact-hold';

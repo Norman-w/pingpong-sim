@@ -8,14 +8,19 @@
 export const NET_HEIGHT_MM = 152.5;
 /** Eye height ≈ 93% of stature. */
 const EYE_TO_STATURE = 0.93;
-/** Shoulder-to-fingertip ≈ 44% stature; use ~36% as forward horizontal arm reach. */
-const ARM_FORWARD_FRAC = 0.36;
-/** Torso lean horizontal contribution ≈ 6% stature. */
-const TORSO_LEAN_FRAC = 0.06;
+/**
+ * Forward horizontal arm reach as a fraction of stature.
+ * Full shoulder→fingertip is ~0.44·H, but table-inward reach is a shorter
+ * horizontal component (raised arm + closed shoulder); ~0.28 matches kids/adults
+ * better than treating the full arm length as table depth.
+ */
+const ARM_FORWARD_FRAC = 0.28;
+/** Torso lean horizontal contribution ≈ 4% stature. */
+const TORSO_LEAN_FRAC = 0.04;
 /** Effective racket forward extension to the contact patch (mm). */
-const RACKET_EXTENSION_MM = 160;
+const RACKET_EXTENSION_MM = 150;
 /** Max forward step-in as a fraction of stature (scaled by level). */
-const STEP_IN_FRAC = 0.14;
+const STEP_IN_FRAC = 0.12;
 /** Half-angle base from shoulder/reach geometry (radians). */
 const FAN_HALF_ANGLE_BASE = 0.72;
 const GRAVITY_MPS2 = 9.81;
