@@ -240,14 +240,16 @@ function availableTechniquesForPreset(preset: ShotPreset): ContactTechnique[] {
   if (rubber === 'long-pips' && heavyBackspin) return ['forehand-loop', 'backhand-loop', 'lift', 'long-push', 'chop'];
   if (rubber === 'medium-pips') return ['punch', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'block', 'lift'];
   if (rubber === 'short-pips') return ['block', 'forehand-drive', 'counter-loop', 'forehand-loop', 'backhand-loop', 'chop'];
+  // Lob is classified by depth (may be short/near-net) but the teaching reply
+  // set is smash-first, not the generic short-ball list.
+  if (preset.id === 'lob') return ['smash', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot'];
+  if (preset.id === 'smash') return ['block', 'chop', 'lob'];
   if (short && heavyBackspin) return ['drop-shot', 'push', 'long-push', 'lift', 'backhand-flick', 'forehand-flick', 'forehand-loop'];
   if (short && heavyTopspin) return ['drop-shot', 'block', 'punch', 'backhand-flick', 'forehand-flick', 'long-push'];
   if (short) return ['drop-shot', 'long-push', 'push', 'lift', 'backhand-flick', 'forehand-flick', 'punch'];
   if (halfLong && heavyBackspin) return ['forehand-loop', 'backhand-loop', 'backhand-flick', 'forehand-flick', 'long-push', 'lift', 'chop'];
   if (heavyBackspin) return ['forehand-loop', 'backhand-loop', 'lift', 'long-push', 'chop'];
   if (heavyTopspin) return ['block', 'counter-loop', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'chop', 'lob'];
-  if (preset.id === 'lob') return ['smash', 'forehand-drive', 'forehand-loop', 'backhand-loop', 'drop-shot'];
-  if (preset.id === 'smash') return ['block', 'chop', 'lob'];
   return ['forehand-drive', 'punch', 'forehand-loop', 'backhand-loop', 'block', 'counter-loop', 'chop'];
 }
 
