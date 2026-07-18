@@ -11,7 +11,8 @@ import type { MachineUiApi } from './machineUi';
 import {
   beginNextContinuousDemoCycle, clearDemoPlaybackPlan, consumeLiveDemoPass,
   configureFollowOnlyDemoPlayback as applyFollowOnlyDemoPlayback,
-  isContinuousFollowDemo, selectFollowViewOnly, setReplaySpeedUi, takeSlowFollowPlaylist,
+  isContinuousFollowDemo, restoreDefaultReplayViews, selectFollowViewOnly,
+  setReplaySpeedUi, takeSlowFollowPlaylist,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
 import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
@@ -59,6 +60,7 @@ export interface TrackingReplayApi {
   enableAutoReplayForDemo: () => void;
   configureFollowOnlyDemoPlayback: (plan: FollowOnlyDemoPlayback) => void;
   clearDemoPlaybackPlan: () => void;
+  restoreDefaultReplayViews: () => void;
   beginNextContinuousDemoCycle: () => void;
   consumeLiveDemoPass: () => 'continue-live' | 'start-replay' | 'none';
   isAutoReplayEnabled: () => boolean;
@@ -199,6 +201,7 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
     enableAutoReplayForDemo,
     configureFollowOnlyDemoPlayback,
     clearDemoPlaybackPlan,
+    restoreDefaultReplayViews,
     beginNextContinuousDemoCycle,
     consumeLiveDemoPass,
     isAutoReplayEnabled: () => trackingAutoReplay,

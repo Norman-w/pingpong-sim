@@ -91,6 +91,7 @@ machineUiApi = initMachineUi({
   stopTrackingDemo: () => trackingDemoApi.stopTrackingDemo(),
   clearDemoLines: () => topicDemoApi.clearDemoLines(),
   setActiveDemoItem: id => topicDemoApi.setActiveDemoItem(id as DemoId | null),
+  exitTopicDemo: () => topicDemoApi?.exitTopicDemo(),
   refreshReplayCuePointsUi: () => trackingReplayApi?.refreshCuePointsUi(),
   receiveStance,
   isTrackingEnabled: () => trackingDemoApi?.isTrackingEnabled() ?? false,
@@ -137,6 +138,8 @@ trackingDemoApi = initTrackingDemo({
   syncWindowIndicators,
   // After a feed, drop hitch time so the new ball is not stepped mid-arc.
   onLiveBallLaunched: () => { lastT = performance.now(); },
+  isDemoActive: () => topicDemoApi?.isDemoActive() ?? false,
+  exitTopicDemo: () => topicDemoApi?.exitTopicDemo(),
 });
 
 topicDemoApi = initTopicDemo({
@@ -153,11 +156,10 @@ topicDemoApi = initTopicDemo({
 });
 
 setResetMachineOnClear(() => {
-  trackingDemoApi.stopTrackingDemo(false);
+  // Only exit when a topic is already running — not during topic startup clearBalls.
+  if (topicDemoApi.isDemoActive()) topicDemoApi.exitTopicDemo();
+  else trackingDemoApi.stopTrackingDemo(false);
   machineUiApi.resetMachineVisualsForClear();
-  topicDemoApi.setDemoActive(false);
-  topicDemoApi.setActiveDemoItem(null);
-  topicDemoApi.clearDemoLines();
 });
 
 // Preset activation touches tracking/demo APIs — run only after they exist.

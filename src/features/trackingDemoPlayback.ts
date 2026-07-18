@@ -34,13 +34,26 @@ let demoSlowSpeed = DEFAULT_DEMO_SLOW_SPEED;
 let demoContinuous = false;
 let demoLivePassesTemplate = 2;
 let demoSlowPassesTemplate = 2;
+/** Topic demos force follow-only checkboxes; restore all-selected on exit. */
+let demoForcedFollowViews = false;
 //#endregion
 
 //#region 公开 API
+/** HTML default: every slow-replay camera checkbox is selected. */
+export function restoreDefaultReplayViews(): void {
+  document.querySelectorAll<HTMLInputElement>('[data-replay-view]').forEach(input => {
+    input.checked = true;
+  });
+}
+
 export function clearDemoPlaybackPlan(): void {
   demoLivePassesRemaining = 0;
   demoSlowPassCount = 0;
   demoContinuous = false;
+  if (demoForcedFollowViews) {
+    demoForcedFollowViews = false;
+    restoreDefaultReplayViews();
+  }
 }
 
 export function configureFollowOnlyDemoPlayback(
@@ -53,6 +66,7 @@ export function configureFollowOnlyDemoPlayback(
   demoSlowPassCount = demoSlowPassesTemplate;
   demoSlowSpeed = plan.slowSpeed ?? DEFAULT_DEMO_SLOW_SPEED;
   demoContinuous = Boolean(plan.continuous);
+  demoForcedFollowViews = true;
   applyUi.selectFollowOnly();
   applyUi.setReplaySpeed(demoSlowSpeed);
   applyUi.enableAutoReplay();

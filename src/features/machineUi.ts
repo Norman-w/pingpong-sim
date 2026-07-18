@@ -57,6 +57,8 @@ export interface MachineUiDeps {
   stopTrackingDemo: () => void;
   clearDemoLines: () => void;
   setActiveDemoItem: (id: string | null) => void;
+  /** Manual machine control leaves an active topic demo. */
+  exitTopicDemo: () => void;
   refreshReplayCuePointsUi: () => void;
   receiveStance: ReceiveStanceApi;
   isTrackingEnabled: () => boolean;
@@ -366,7 +368,10 @@ function renderPresetButtons(): void {
       button.innerHTML = preset.shortcut
         ? `<kbd>${preset.shortcut}</kbd>${preset.name}`
         : preset.name;
-      button.addEventListener('click', () => setActivePreset(preset));
+      button.addEventListener('click', () => {
+        deps.exitTopicDemo();
+        setActivePreset(preset);
+      });
       buttons.appendChild(button);
     }
     section.append(title, buttons);
@@ -376,12 +381,11 @@ function renderPresetButtons(): void {
 
 function feedMachine(preset = activePreset, preserveTracking = false): RapierBall | undefined {
   if (!isReady()) return undefined;
-  if (!preserveTracking) deps.stopTrackingDemo();
-  setMachineVisible(true);
   if (!preserveTracking) {
-    deps.setActiveDemoItem(null);
-    deps.clearDemoLines();
+    deps.exitTopicDemo();
+    deps.stopTrackingDemo();
   }
+  setMachineVisible(true);
   if (getBallCount() >= MAX_TRACKED_BALLS) {
     const oldest = getBalls()[0];
     deps.scene.remove(oldest.mesh);
@@ -444,7 +448,10 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
 }
 
 function setMachineRunning(running: boolean): void {
-  if (running) deps.stopTrackingDemo();
+  if (running) {
+    deps.exitTopicDemo();
+    deps.stopTrackingDemo();
+  }
   machineRunning = running;
   nextMachineShotAt = performance.now();
   machineToggleEl.classList.toggle('active', running);

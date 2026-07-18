@@ -59,6 +59,8 @@ export interface TopicDemoApi {
   setActiveDemoItem: (id: DemoId | null) => void;
   isDemoActive: () => boolean;
   setDemoActive: (value: boolean) => void;
+  /** Leave topic mode: stop follow playlist and restore default replay-view checks. */
+  exitTopicDemo: () => void;
 }
 //#endregion
 
@@ -177,6 +179,24 @@ export function initTopicDemo(topicDemoDeps: TopicDemoDeps): TopicDemoApi {
   updateDemo();
   deps.syncWindowIndicators();
 
+  // Opening machine / tracking panels leaves the topic playlist.
+  for (const windowId of ['machine-window', 'tracking-window'] as const) {
+    document.querySelector(`[data-window-toggle="${windowId}"]`)?.addEventListener('click', () => {
+      if (demoActive) exitTopicDemo();
+    });
+  }
+  // Using controls inside those panels also exits (capture before the control acts).
+  for (const windowId of ['machine-window', 'tracking-window'] as const) {
+    document.getElementById(windowId)?.addEventListener('click', event => {
+      if (!demoActive) return;
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('button, input, select, label, .preset-button')) return;
+      // tracking-start owns exit so it does not immediately re-start follow.
+      if (target.closest('#tracking-start')) return;
+      exitTopicDemo();
+    }, true);
+  }
+
   return {
     fireDemo,
     updateDemo,
@@ -185,7 +205,22 @@ export function initTopicDemo(topicDemoDeps: TopicDemoDeps): TopicDemoApi {
     setActiveDemoItem,
     isDemoActive: () => demoActive,
     setDemoActive: (value: boolean) => { demoActive = value; },
+    exitTopicDemo,
   };
+}
+
+function exitTopicDemo(): void {
+  // Must not run while starting a topic: clearBalls fires before demoActive=true
+  // and would wipe the follow-only playlist that was just configured.
+  if (!demoActive) return;
+  demoActive = false;
+  setActiveDemoItem(null);
+  clearDemoLines();
+  deps.trackingDemo.stopTrackingDemo(true);
+  deps.trackingReplay.clearDemoPlaybackPlan();
+  deps.machineUiApi.lockTargetDepthMm(null);
+  deps.machineUiApi.setMachineVisible(true);
+  deps.syncWindowIndicators();
 }
 
 function clearDemoLines(): void {
@@ -223,6 +258,9 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   if (variant === 'child-lob-adult' || variant === 'child-triangle-adult') scenario.eyeHeightMm = 1600;
   if (variant === 'stance-high') scenario.eyeHeightMm = 1800;
 
+  // Drop any previous topic first so clearBalls inside startTrackingDemo
+  // cannot treat this launch as an "exit" and wipe the new playlist.
+  if (demoActive) exitTopicDemo();
   closeAllUiPopups();
   deps.trackingDemo.stopTrackingDemo(false);
   deps.machineUiApi.setMachineRunning(false);
@@ -233,7 +271,7 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   randomizeEl.checked = id === 'child-lob';
   deps.trackingDemo.setContinuousChecked(false);
   if (id === 'child-lob') {
-    // Each cycle: 1 live feed (record) + 1× full-speed replay + 2× slow — same trajectory.
+    // Follow view only: 2× normal (1 live + 1× full-speed replay) + 2× slow.
     deps.machineUiApi.rollAndLockLobDemoTarget();
     deps.machineUiApi.setBallStyle('white-yellow-eight');
     deps.trackingReplay.configureFollowOnlyDemoPlayback({

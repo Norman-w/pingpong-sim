@@ -32,6 +32,8 @@ export interface TrackingDemoDeps {
   syncWindowIndicators: () => void;
   /** Called after a live tracking feed so the render loop does not apply a hitch dt. */
   onLiveBallLaunched?: () => void;
+  isDemoActive?: () => boolean;
+  exitTopicDemo?: () => void;
 }
 
 export interface TrackingDemoApi {
@@ -154,6 +156,11 @@ export function initTrackingDemo(trackingDemoDeps: TrackingDemoDeps): TrackingDe
   trackingContinuousEl = document.getElementById('tracking-continuous') as HTMLInputElement;
 
   trackingStartEl.addEventListener('click', () => {
+    // Leave topic mode without immediately starting a fresh follow run.
+    if (deps.isDemoActive?.()) {
+      deps.exitTopicDemo?.();
+      return;
+    }
     if (trackingEnabled) {
       stopTrackingDemo();
     } else {
