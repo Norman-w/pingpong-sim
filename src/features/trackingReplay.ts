@@ -38,7 +38,6 @@ export interface TrackingReplayDeps {
   onAutoReplayEnabled: () => void;
   onAutoReplayDisabled: () => void;
   onReplayStateChanged: () => void;
-  /** After a continuous follow-only playlist finishes slow passes. */
   onContinuousFollowDemoCycle?: () => void;
 }
 
@@ -53,11 +52,9 @@ export interface TrackingReplayApi {
   updateReplay: (deltaSeconds: number) => void;
   refreshCuePointsUi: () => void;
   enableAutoReplayForDemo: () => void;
-  /** Child-lob style: N live follow passes, then M slow follow-only replays. */
   configureFollowOnlyDemoPlayback: (plan: FollowOnlyDemoPlayback) => void;
   clearDemoPlaybackPlan: () => void;
   beginNextContinuousDemoCycle: () => void;
-  /** After a live rally ends: another live feed, start slow playlist, or no demo plan. */
   consumeLiveDemoPass: () => 'continue-live' | 'start-replay' | 'none';
   isAutoReplayEnabled: () => boolean;
   syncAutoReplayFromCheckbox: () => void;
@@ -490,7 +487,7 @@ function finishTrackingReplayCycle(): void {
   highlightReplayCueButtons();
   updateReplayControlButtons();
   document.getElementById('tracking-status')!.innerHTML =
-    `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}× · 可重播或点选关键暂停点。`;
+    `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}×`;
 }
 
 function syncReplayCueHighlightForTime(time: number): void {
