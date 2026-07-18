@@ -62,6 +62,25 @@ export function runTrackingDemoFrame(
 ): void {
   const { deps, trackingTarget, machineLookPoint, incomingSource, lobTeaching } = ctx;
   if (!getBalls().includes(session.ball)) {
+    // Ball despawned mid-rally. After contact, still advance the topic playlist
+    // instead of wiping live×2 / slow×2 continuous demos.
+    if (session.phase === 'contact-hold' || session.phase === 'post-contact-source') {
+      const demoAction = deps.trackingReplay.consumeLiveDemoPass();
+      if (demoAction === 'continue-live') {
+        ctx.clearTrackingSession();
+        ctx.launchNextLiveDemoBall();
+        return;
+      }
+      if (
+        demoAction === 'start-replay' ||
+        (deps.trackingReplay.isAutoReplayEnabled() && deps.trackingReplay.isRecordingFinalized())
+      ) {
+        deps.machineUiApi.discardBallsExcept(null);
+        ctx.clearTrackingSession();
+        deps.trackingReplay.startReplay(null);
+        return;
+      }
+    }
     ctx.stopTrackingDemo();
     return;
   }
@@ -124,16 +143,24 @@ export function runTrackingDemoFrame(
   if (session.phase === 'post-contact-source' && elapsedInPhase > 420) {
     const demoAction = deps.trackingReplay.consumeLiveDemoPass();
     if (demoAction === 'continue-live') {
+      // Drop the finished rally ball so it cannot linger mid-arc beside the next feed.
+      deps.machineUiApi.discardBallsExcept(null);
       ctx.clearTrackingSession();
       ctx.launchNextLiveDemoBall();
       return;
     }
-    if (
-      demoAction === 'start-replay' ||
-      (deps.trackingReplay.isAutoReplayEnabled() && deps.trackingReplay.isRecordingFinalized())
-    ) {
+    if (demoAction === 'start-replay') {
+      const finishedBall = session.ball;
+      deps.machineUiApi.discardBallsExcept(finishedBall);
       ctx.clearTrackingSession();
-      deps.trackingReplay.startReplay(session.ball);
+      deps.trackingReplay.startReplay(finishedBall);
+      return;
+    }
+    if (deps.trackingReplay.isAutoReplayEnabled() && deps.trackingReplay.isRecordingFinalized()) {
+      const finishedBall = session.ball;
+      deps.machineUiApi.discardBallsExcept(finishedBall);
+      ctx.clearTrackingSession();
+      deps.trackingReplay.startReplay(finishedBall);
       return;
     }
     if (ctx.trackingContinuous && ctx.trackingQueue.length > 0) {

@@ -30,6 +30,8 @@ export interface TrackingDemoDeps {
   trackingReplay: TrackingReplayApi;
   clearBalls: () => Promise<void>;
   syncWindowIndicators: () => void;
+  /** Called after a live tracking feed so the render loop does not apply a hitch dt. */
+  onLiveBallLaunched?: () => void;
 }
 
 export interface TrackingDemoApi {
@@ -199,9 +201,15 @@ function advanceClocksBy(pausedMs: number): void {
 }
 
 function stopTrackingDemo(resetStatus = true): void {
-  deps.trackingReplay.clearDemoPlaybackPlan();
+  // Only wipe the topic playlist when an active tracking run is stopped.
+  // startTrackingDemo → clearBalls also calls stop while trackingEnabled is
+  // already false; clearing here would erase the plan configured just above.
+  const wasTracking = trackingEnabled;
   deps.trackingReplay.stopReplay();
-  deps.machineUiApi.lockTargetDepthMm(null);
+  if (wasTracking) {
+    deps.trackingReplay.clearDemoPlaybackPlan();
+    deps.machineUiApi.lockTargetDepthMm(null);
+  }
   deps.receiveStance.clearReceiveFailureFeedback();
   deps.receiveStance.clearMissedPreferredMarker();
   deps.receiveStance.autoDepthOverrideX = null;
@@ -294,6 +302,7 @@ function launchNextTrackingBall(restoreFollowView = false): void {
   const launchedAt = performance.now();
   beginTrackingBall(ball, launchedAt, useFollowCamera, !restoreFollowView);
   trackingNextShotAt = launchedAt + 1000 / deps.machineUiApi.readMachineSettings().cadence;
+  deps.onLiveBallLaunched?.();
 }
 
 async function startTrackingDemo(): Promise<void> {

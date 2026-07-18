@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { RapierBall } from '../physics';
 import { buildReplayCuePoints, listReplayCueRecipe, type ReplayCuePoint } from '../replayCuePoints';
-import { captureQuickViewBase, restoreQuickViewBase, updateHighArcFraming } from '../highArcFraming';
-import { formatSpinRpm, initSpinBillboard, type SpinBillboardApi } from './spinBillboard';
+import { restoreQuickViewBase, updateHighArcFraming } from '../highArcFraming';
+import { initSpinBillboard, type SpinBillboardApi } from './spinBillboard';
 import type { TrackingSnapshot } from './trackingTypes';
 import type { QuickViewId, ReceiveStanceApi } from './receiveStance';
 import type { MachineUiApi } from './machineUi';
@@ -14,8 +14,21 @@ import {
   isContinuousFollowDemo, selectFollowViewOnly, setReplaySpeedUi, takeSlowFollowPlaylist,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
-import { activeReplayCueIdAt, advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
+import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
+import { snapRecordingLaunchToOrigin } from './trackingReplayLaunchView';
+import {
+  applyTrackingReplayView as applyReplayView,
+  highlightReplayCueButtons as highlightCues,
+  seekTrackingReplayCue as seekCue,
+  syncReplayCueHighlightForTime as syncCueHighlight,
+  updateReplayControlButtons as updateControlButtons,
+  type ReplayControlsCtx,
+} from './trackingReplayControls';
 //#endregion
+
+//#region 常量/配置
+//#endregion
+
 //#region 模型/类型
 export type { FollowOnlyDemoPlayback };
 export interface TrackingReplayDeps {
@@ -39,7 +52,7 @@ export interface TrackingReplayApi {
   finalizeRecording: () => void;
   isRecordingFinalized: () => boolean;
   advanceRecordingClockBy: (pausedMs: number) => void;
-  startReplay: (sourceBall: RapierBall) => void;
+  startReplay: (sourceBall?: RapierBall | null) => void;
   stopReplay: () => void;
   updateReplay: (deltaSeconds: number) => void;
   refreshCuePointsUi: () => void;
@@ -81,10 +94,25 @@ let trackingReplayTime = 0;
 let trackingReplaySourceBall: RapierBall | null = null;
 let trackingReplayViews: QuickViewId[] = [];
 let trackingReplayViewIndex = 0;
+/** Skip the same-frame delta after startReplay so t=0 is actually shown. */
+let trackingReplaySkipNextDelta = false;
+let trackingReplayLaunchOrigin = new THREE.Vector3();
 let trackingReplayCuePoints: ReplayCuePoint[] = [];
 let trackingReplayActiveCueId: ReplayCuePoint['id'] | null = null;
 let trackingReplayMesh!: THREE.Mesh;
 let spinBillboard!: SpinBillboardApi;
+
+const controlsCtx = (): ReplayControlsCtx => ({
+  camera: deps.camera, controls: deps.controls, receiveStance: deps.receiveStance,
+  trackingReplayMesh, spinBillboard, replayCueGridEl, trackingReplayPauseEl, trackingReplayRestartEl,
+  getViews: () => trackingReplayViews, getViewIndex: () => trackingReplayViewIndex,
+  getRecording: () => trackingRecording, getCuePoints: () => trackingReplayCuePoints,
+  getActiveCueId: () => trackingReplayActiveCueId, setActiveCueId: id => { trackingReplayActiveCueId = id; },
+  getReplayTime: () => trackingReplayTime, setReplayTime: time => { trackingReplayTime = time; },
+  isReplayMode: () => trackingReplayMode, isPaused: () => trackingReplayPaused,
+  isExhausted: () => trackingReplayExhausted, setPaused: p => { trackingReplayPaused = p; },
+  setExhausted: e => { trackingReplayExhausted = e; }, getSpeed: () => trackingSpeed, replayViewLabel,
+});
 
 function selectedReplayViews(): QuickViewId[] {
   const selected = Array.from(document.querySelectorAll<HTMLInputElement>('[data-replay-view]:checked'))
@@ -140,7 +168,7 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
       return;
     }
     trackingReplayPaused = !trackingReplayPaused;
-    updateReplayControlButtons();
+    updateControlButtons(controlsCtx());
     if (trackingReplayPaused) {
       const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
       document.getElementById('tracking-status')!.innerHTML =
@@ -148,7 +176,7 @@ export function initTrackingReplay(trackingReplayDeps: TrackingReplayDeps): Trac
         `轨迹冻结；球体旋转按当前角速度继续，便于观察旋转方向与转速。`;
     } else {
       spinBillboard.hide();
-      applyTrackingReplayView();
+      applyReplayView(controlsCtx());
     }
   });
   trackingReplayRestartEl.addEventListener('click', () => {
@@ -183,12 +211,13 @@ function beginRecording(ball: RapierBall, now: number): void {
   trackingRecordingFinalized = false;
   trackingRecordingBounceTimes = [];
   trackingRecordingImpactCount = ball.tableImpacts;
-  const position = ball.body.translation();
+  // Anchor sample 0 on the nozzle origin from the feed — not a later body pose.
+  trackingReplayLaunchOrigin.copy(deps.machineUiApi.currentMachineBallOrigin);
   const rotation = ball.body.rotation();
   const angularVelocity = ball.body.angvel();
   trackingRecording = [{
     time: 0,
-    position: new THREE.Vector3(position.x * 1000, position.y * 1000, position.z * 1000),
+    position: trackingReplayLaunchOrigin.clone(),
     rotation: new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
     angularVelocity: new THREE.Vector3(angularVelocity.x, angularVelocity.y, angularVelocity.z),
   }];
@@ -214,7 +243,7 @@ function recordFrame(now: number, ball: RapierBall): void {
 function finalizeRecording(): void {
   trackingRecordingFinalized = true;
   if (trackingRecording.length < 2) return;
-  updateReplayControlButtons();
+  updateControlButtons(controlsCtx());
 }
 
 function advanceRecordingClockBy(pausedMs: number): void {
@@ -269,10 +298,10 @@ function refreshCuePointsUi(): void {
     button.textContent = slot.label;
     button.title = slot.note;
     button.disabled = !cue;
-    if (cue) button.addEventListener('click', () => seekTrackingReplayCue(cue));
+    if (cue) button.addEventListener('click', () => seekCue(controlsCtx(), cue));
     replayCueGridEl.appendChild(button);
   }
-  highlightReplayCueButtons();
+  highlightCues(controlsCtx());
 }
 
 function stopReplay(): void {
@@ -286,21 +315,25 @@ function stopReplay(): void {
   trackingReplayActiveCueId = null;
   spinBillboard.hide();
   if (deps.receiveStance.hasLockedQuickView()) restoreQuickViewBase(deps.camera, deps.controls);
-  updateReplayControlButtons();
+  updateControlButtons(controlsCtx());
   refreshCuePointsUi();
   deps.machineUiApi.updateMachineOperatingStatus();
   deps.syncWindowIndicators();
 }
 
-function startReplay(sourceBall: RapierBall): void {
+function startReplay(sourceBall?: RapierBall | null): void {
   if (trackingRecording.length < 2) return;
-  trackingReplaySourceBall = sourceBall;
+  // Hide leftover live balls so replay is not confused with a mid-arc remnant.
+  deps.machineUiApi.discardBallsExcept(sourceBall ?? null);
+  trackingReplaySourceBall = sourceBall ?? null;
   if (trackingReplaySourceBall) trackingReplaySourceBall.mesh.visible = false;
   trackingReplayMode = true;
   trackingReplayPaused = false;
   trackingReplayExhausted = false;
   trackingReplayTime = 0;
   trackingReplayActiveCueId = null;
+  trackingReplaySkipNextDelta = true;
+  snapRecordingLaunchToOrigin(trackingRecording, trackingReplayLaunchOrigin);
   const slowPlaylist = takeSlowFollowPlaylist();
   if (slowPlaylist) {
     selectFollowViewOnly();
@@ -313,16 +346,19 @@ function startReplay(sourceBall: RapierBall): void {
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   trackingReplayMesh.visible = true;
-  applyTrackingReplayView();
+  // Stay in the child's receive stance — look toward the machine-side launch, do not teleport.
+  applyReplayView(controlsCtx());
+  deps.controls.target.copy(trackingReplayMesh.position);
+  deps.controls.update();
   refreshCuePointsUi();
-  updateReplayControlButtons();
+  updateControlButtons(controlsCtx());
   deps.machineUiApi.updateMachineOperatingStatus();
   deps.syncWindowIndicators();
 }
 
 function updateReplay(deltaSeconds: number): void {
   if (!trackingReplayMode) return;
-  const followView = deps.receiveStance.activeQuickView === 'follow';
+  const followView = (trackingReplayViews[trackingReplayViewIndex] ?? 'follow') === 'follow';
   if (trackingReplayPaused) {
     const pausedFrame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
     advanceTrackingReplaySpin(trackingReplayMesh, pausedFrame.angularVelocity, deltaSeconds, trackingSpeed);
@@ -334,6 +370,12 @@ function updateReplay(deltaSeconds: number): void {
     }
     return;
   }
+  if (trackingReplaySkipNextDelta) {
+    trackingReplaySkipNextDelta = false;
+    trackingReplayMesh.position.copy(trackingRecording[0].position);
+    if (followView) deps.controls.target.copy(trackingReplayMesh.position);
+    return;
+  }
   trackingReplayTime += deltaSeconds * trackingSpeed;
   const last = trackingRecording[trackingRecording.length - 1];
   const ended = trackingReplayTime >= last.time;
@@ -341,7 +383,7 @@ function updateReplay(deltaSeconds: number): void {
   const frame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
   trackingReplayMesh.position.copy(frame.position);
   advanceTrackingReplaySpin(trackingReplayMesh, frame.angularVelocity, deltaSeconds, trackingSpeed);
-  syncReplayCueHighlightForTime(trackingReplayTime);
+  syncCueHighlight(controlsCtx(), trackingReplayTime);
   if (followView) {
     deps.controls.target.lerp(trackingReplayMesh.position, 1 - Math.exp(-12 * deltaSeconds));
   } else {
@@ -354,84 +396,16 @@ function updateReplay(deltaSeconds: number): void {
     trackingReplayViewIndex += 1;
     trackingReplayTime = 0;
     trackingReplayActiveCueId = null;
+    trackingReplaySkipNextDelta = true;
     trackingReplayMesh.position.copy(trackingRecording[0].position);
     trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
-    applyTrackingReplayView();
-    highlightReplayCueButtons();
+    applyReplayView(controlsCtx());
+    deps.controls.target.copy(trackingReplayMesh.position);
+    deps.controls.update();
+    highlightCues(controlsCtx());
     return;
   }
   finishTrackingReplayCycle();
-}
-
-//#endregion
-
-//#region 业务逻辑
-function applyTrackingReplayView(): void {
-  const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
-  if (view === 'follow') {
-    deps.receiveStance.applyViewPreset();
-    deps.controls.target.copy(trackingReplayMesh.position);
-  } else {
-    const preset = deps.receiveStance.quickViews[view];
-    deps.camera.fov = 45;
-    deps.camera.updateProjectionMatrix();
-    deps.camera.position.set(...preset.position);
-    deps.controls.target.set(...preset.target);
-    captureQuickViewBase(deps.camera, deps.controls, 45);
-    deps.receiveStance.setQuickViewActive(view);
-  }
-  deps.controls.enabled = true;
-  deps.controls.update();
-  const followOnlyPlaylist = trackingReplayViews.every(item => item === 'follow');
-  document.getElementById('tracking-status')!.innerHTML =
-    `<strong>${followOnlyPlaylist ? '慢放跟球' : '慢放回看'} · ${replayViewLabel(view)}</strong> · 速度 ${trackingSpeed.toFixed(2)}×<br>` +
-    `${followOnlyPlaylist ? '跟球视角' : '视角'} ${trackingReplayViewIndex + 1}/${trackingReplayViews.length}；球体位置与旋转均按实录复现。`;
-}
-
-function updateReplayControlButtons(): void {
-  const inReplay = trackingReplayMode && trackingRecording.length >= 2;
-  trackingReplayPauseEl.disabled = !inReplay;
-  trackingReplayRestartEl.disabled = !inReplay;
-  trackingReplayPauseEl.classList.toggle('is-playing', inReplay && !trackingReplayPaused && !trackingReplayExhausted);
-  trackingReplayPauseEl.classList.toggle('is-paused', inReplay && (trackingReplayPaused || trackingReplayExhausted));
-  if (!inReplay) {
-    trackingReplayPauseEl.textContent = '播放';
-    return;
-  }
-  if (trackingReplayExhausted) {
-    trackingReplayPauseEl.textContent = '播放';
-  } else if (trackingReplayPaused) {
-    trackingReplayPauseEl.textContent = '继续';
-  } else {
-    trackingReplayPauseEl.textContent = '暂停';
-  }
-}
-
-function highlightReplayCueButtons(): void {
-  const buttons = replayCueGridEl.querySelectorAll<HTMLButtonElement>('[data-replay-cue]');
-  buttons.forEach(button => {
-    const cueId = button.dataset.replayCue as ReplayCuePoint['id'];
-    button.classList.toggle('active', cueId === trackingReplayActiveCueId);
-  });
-}
-
-function seekTrackingReplayCue(cue: ReplayCuePoint): void {
-  if (!trackingReplayMode) return;
-  trackingReplayExhausted = false;
-  trackingReplayTime = cue.time;
-  trackingReplayPaused = true;
-  trackingReplayActiveCueId = cue.id;
-  const frame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
-  trackingReplayMesh.position.copy(frame.position);
-  trackingReplayMesh.quaternion.copy(frame.rotation);
-  if (deps.receiveStance.activeQuickView === 'follow') deps.controls.target.copy(trackingReplayMesh.position);
-  highlightReplayCueButtons();
-  updateReplayControlButtons();
-  spinBillboard.show(cue.label, frame.angularVelocity, trackingReplayMesh.position);
-  const view = trackingReplayViews[trackingReplayViewIndex] ?? 'follow';
-  document.getElementById('tracking-status')!.innerHTML =
-    `<strong>暂停点 · ${cue.label}</strong> · ${replayViewLabel(view)} · ${trackingSpeed.toFixed(2)}×<br>` +
-    formatSpinRpm(frame.angularVelocity);
 }
 
 function restartTrackingReplayPlayback(): void {
@@ -440,14 +414,18 @@ function restartTrackingReplayPlayback(): void {
   trackingReplayPaused = false;
   trackingReplayTime = 0;
   trackingReplayActiveCueId = null;
+  trackingReplaySkipNextDelta = true;
   trackingReplayViews = selectedReplayViews();
   trackingReplayViewIndex = 0;
+  snapRecordingLaunchToOrigin(trackingRecording, trackingReplayLaunchOrigin);
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   spinBillboard.hide();
-  applyTrackingReplayView();
-  highlightReplayCueButtons();
-  updateReplayControlButtons();
+  applyReplayView(controlsCtx());
+  deps.controls.target.copy(trackingReplayMesh.position);
+  deps.controls.update();
+  highlightCues(controlsCtx());
+  updateControlButtons(controlsCtx());
 }
 
 function finishTrackingReplayCycle(): void {
@@ -461,7 +439,7 @@ function finishTrackingReplayCycle(): void {
     trackingReplayMesh.visible = false;
     trackingReplayActiveCueId = null;
     spinBillboard.hide();
-    updateReplayControlButtons();
+    updateControlButtons(controlsCtx());
     refreshCuePointsUi();
     beginNextContinuousDemoCycle();
     deps.onContinuousFollowDemoCycle?.();
@@ -475,17 +453,16 @@ function finishTrackingReplayCycle(): void {
   trackingReplayMesh.position.copy(trackingRecording[0].position);
   trackingReplayMesh.quaternion.copy(trackingRecording[0].rotation);
   spinBillboard.hide();
-  applyTrackingReplayView();
-  highlightReplayCueButtons();
-  updateReplayControlButtons();
+  applyReplayView(controlsCtx());
+  highlightCues(controlsCtx());
+  updateControlButtons(controlsCtx());
   document.getElementById('tracking-status')!.innerHTML =
     `<strong>本轮回放结束</strong> · ${trackingSpeed.toFixed(2)}×`;
 }
+//#endregion
 
-function syncReplayCueHighlightForTime(time: number): void {
-  const nextId = activeReplayCueIdAt(trackingReplayCuePoints, time) as ReplayCuePoint['id'] | null;
-  if (nextId === trackingReplayActiveCueId) return;
-  trackingReplayActiveCueId = nextId;
-  highlightReplayCueButtons();
-}
+//#region 业务逻辑
+//#endregion
+
+//#region 方法/工具
 //#endregion

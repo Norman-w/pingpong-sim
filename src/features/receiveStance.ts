@@ -8,6 +8,7 @@ import {
   TABLE_TECHNIQUES,
   type ContactTechnique,
 } from '../domain/contactRules';
+import { lobChaseContactZ, lobSmashStanceX, NET_X_MM } from '../domain/lobFootwork';
 import { captureQuickViewBase, clearQuickViewBase } from '../highArcFraming';
 import type { PlayerLevel, ShotPreset, TargetLane } from '../serveMachine';
 import { initContactGuide, type ContactGuideApi } from './contactGuide';
@@ -59,6 +60,8 @@ export interface ReceiveStanceDeps {
   VENUE_WIDTH: number;
   getActivePreset: () => ShotPreset;
   getTargetLane: () => TargetLane;
+  /** Intended landing marker (mm) for the current feed — drives lob chase. */
+  getIntendedLandingMm: () => { x: number; z: number };
   isTrackingReplayMode: () => boolean;
   getTrackingReplayMesh: () => THREE.Object3D;
   isTrackingEnabled: () => boolean;
@@ -108,6 +111,8 @@ let stanceMode: StanceMode = 'fixed';
 let receiverLevel: PlayerLevel = 'club';
 let autoContactZ = 0;
 let autoDepthOverrideX: number | null = null;
+/** Lob smash chase depth while waiting for window-B retreat override. */
+let lobChaseDepthX: number | null = null;
 let activeQuickView: QuickViewId = 'follow';
 let contactTechnique: ContactTechnique = 'forehand-loop';
 let trackedReceiveBounceX: number | null = null;
@@ -377,9 +382,12 @@ function autoStanceDepth(technique: ContactTechnique): { x: number; label: strin
   if (technique === 'block' || technique === 'punch' || technique === 'forehand-drive') return { x: 3150, label: '近台' };
   if (technique === 'chop') return { x: 4250, label: '远台削球' };
   if (technique === 'lob') return { x: 4500, label: '远台防守' };
-  // After a lob bounce near mid-depth, stand just behind the end line and
-  // reach forward to the post-bounce apex / early descent.
-  if (technique === 'smash') return { x: 2880, label: '中近台进攻' };
+  if (technique === 'smash') {
+    if (receiveStanceDeps.getActivePreset().id === 'lob' && lobChaseDepthX !== null) {
+      return { x: lobChaseDepthX, label: '追落点进攻' };
+    }
+    return { x: 2880, label: '中近台进攻' };
+  }
   return { x: 3600, label: '中台进攻' };
 }
 
@@ -431,6 +439,7 @@ function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, ta
 
 function resetAutomaticStance(moveCamera = false): void {
   autoDepthOverrideX = null;
+  lobChaseDepthX = null;
   if (stanceMode !== 'auto') return;
   autoContactZ = configuredContactZ();
   updateStanceDisplay();
@@ -440,16 +449,33 @@ function resetAutomaticStance(moveCamera = false): void {
 function moveAutomaticStanceForBall(ballPoint: THREE.Vector3, velocity: { x: number; z: number }, deltaSeconds: number): void {
   if (stanceMode !== 'auto') return;
   const deps = receiveStanceDeps;
+  const isLobSmash = deps.getActivePreset().id === 'lob' && contactTechnique === 'smash';
   const depth = autoStanceDepth(contactTechnique);
   const guideX = TABLE_TECHNIQUES.has(contactTechnique)
     ? tableTechniqueContactX(contactTechnique)
     : depth.x - CONTACT_TECHNIQUES[contactTechnique].forwardMm;
-  if (velocity.x > 0.05 && ballPoint.x < guideX) {
+  const zMin = deps.TABLE_CENTER_Z - 820;
+  const zMax = deps.TABLE_CENTER_Z + 820;
+
+  if (isLobSmash) {
+    const landing = deps.getIntendedLandingMm();
+    if (ballPoint.x > NET_X_MM - 500 && velocity.x > 0.02) {
+      autoContactZ = THREE.MathUtils.lerp(autoContactZ, lobChaseContactZ({
+        ballZMm: ballPoint.z, velocityZMps: velocity.z, intendedLandingZMm: landing.z,
+        hasBounced: trackedReceiveBounceX !== null, zMin, zMax,
+      }), 0.16);
+    }
+    lobChaseDepthX = autoDepthOverrideX === null
+      ? lobSmashStanceX(trackedReceiveBounceX
+        ?? (landing.x > NET_X_MM ? landing.x : deps.getActivePreset().targetDepthMm))
+      : null;
+  } else if (velocity.x > 0.05 && ballPoint.x < guideX) {
     const seconds = (guideX - ballPoint.x) / (velocity.x * 1000);
     if (seconds > 0 && seconds < 1.5) {
-      autoContactZ = THREE.MathUtils.clamp(ballPoint.z + velocity.z * 1000 * seconds, deps.TABLE_CENTER_Z - 820, deps.TABLE_CENTER_Z + 820);
+      autoContactZ = THREE.MathUtils.clamp(ballPoint.z + velocity.z * 1000 * seconds, zMin, zMax);
     }
   }
+
   const pose = effectiveStancePose();
   const maximumStep = currentReceiverProfile().moveSpeedMmPerSec * deltaSeconds;
   const dx = pose.x - deps.camera.position.x;

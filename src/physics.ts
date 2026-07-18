@@ -361,6 +361,11 @@ export function getBalls(): readonly RapierBall[] { return balls; }
 export function getBallCount(): number { return balls.length; }
 export function isReady(): boolean { return readyFlag; }
 
+/** Drop pending fixed steps so a long hitch after spawn cannot jump the new ball mid-arc. */
+export function resetStepAccumulator(): void {
+  accumulator = 0;
+}
+
 // Advance by real elapsed time, independent of the display refresh rate.
 export function step(elapsedSeconds: number): void {
   if (!readyFlag) return;

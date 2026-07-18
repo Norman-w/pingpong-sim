@@ -7,6 +7,7 @@ import {
   getBalls,
   isReady,
   removeBall,
+  resetStepAccumulator,
   type RapierBall,
 } from '../physics';
 import {
@@ -34,9 +35,9 @@ const MACHINE_NOZZLE_TIP_LOCAL_X = 265;
 const MAX_TRACKED_BALLS = 80;
 /** Lift + tube thickness keep landing discs from z-fighting the table in god view. */
 const LANDING_DISC_CLEARANCE_MM = 10;
-/** Child-lob teaching band (mm): nearer still deep enough to avoid sticky second bounce. */
-const LOB_DEMO_DEPTH_MIN_MM = 1860;
-const LOB_DEMO_DEPTH_MAX_MM = 2280;
+/** Full receiver-half lob band (mm): just past net ↔ near end line. */
+const LOB_DEMO_DEPTH_MIN_MM = 1520;
+const LOB_DEMO_DEPTH_MAX_MM = 2620;
 //#endregion
 
 //#region 模型/类型
@@ -74,13 +75,21 @@ export interface MachineUiApi {
   setMachineRunning: (running: boolean) => void;
   setMachineVisible: (visible: boolean) => void;
   syncAllFlatChoices: () => void;
+  setBallStyle: (style: BallStyle) => void;
   updateMachineOperatingStatus: () => void;
   resetMachineVisualsForClear: () => void;
   incrementLandingCount: () => void;
   /** Lock rally depth for repeated feeds (null clears). */
   lockTargetDepthMm: (depthMm: number | null) => void;
-  /** Roll a lob teaching depth (near↔deep) and lock it for the current demo cycle. */
+  /**
+   * Roll a full-table lob target (depth + random lane) and lock depth for the
+   * current demo cycle. Lane stays on `random` so each feed re-rolls Z.
+   */
+  rollAndLockLobDemoTarget: () => number;
+  /** @deprecated Prefer rollAndLockLobDemoTarget — kept as alias. */
   rollAndLockLobDemoDepth: () => number;
+  /** Remove every physics ball except an optional keep (e.g. replay source). */
+  discardBallsExcept: (keep?: RapierBall | null) => void;
   readonly targetMarker: THREE.Mesh;
   readonly firstBounceMarker: THREE.Mesh;
   readonly serveTrajectoryLine: THREE.Line;
@@ -203,11 +212,14 @@ export function initMachineUi(machineUiDeps: MachineUiDeps): MachineUiApi {
     setMachineRunning,
     setMachineVisible,
     syncAllFlatChoices,
+    setBallStyle: applyBallStyle,
     updateMachineOperatingStatus,
     resetMachineVisualsForClear,
     incrementLandingCount,
     lockTargetDepthMm: (depthMm: number | null) => { targetDepthOverrideMm = depthMm; },
-    rollAndLockLobDemoDepth,
+    rollAndLockLobDemoTarget,
+    rollAndLockLobDemoDepth: rollAndLockLobDemoTarget,
+    discardBallsExcept,
     get targetMarker() { return targetMarker; },
     get firstBounceMarker() { return firstBounceMarker; },
     get serveTrajectoryLine() { return serveTrajectoryLine; },
@@ -228,10 +240,29 @@ function syncAllFlatChoices(): void {
   document.querySelectorAll<HTMLElement>('[data-flat-select]').forEach(syncFlatChoiceGroup);
 }
 
-function rollAndLockLobDemoDepth(): number {
+function applyBallStyle(style: BallStyle): void {
+  ballStyleEl.value = style;
+  syncAllFlatChoices();
+  deps.setBallStyle(style);
+}
+
+function rollAndLockLobDemoTarget(): number {
   const depthMm = LOB_DEMO_DEPTH_MIN_MM + Math.random() * (LOB_DEMO_DEPTH_MAX_MM - LOB_DEMO_DEPTH_MIN_MM);
   targetDepthOverrideMm = Math.round(depthMm);
+  // Full-table lateral: each feed re-rolls Z via randomTargetZ.
+  laneEl.value = 'random';
+  syncAllFlatChoices();
   return targetDepthOverrideMm;
+}
+
+function discardBallsExcept(keep?: RapierBall | null): void {
+  for (const ball of [...getBalls()]) {
+    if (keep && ball === keep) continue;
+    deps.scene.remove(ball.mesh);
+    deps.machineBallMeta.delete(ball.body);
+    removeBall(ball);
+  }
+  document.getElementById('bc')!.textContent = String(getBallCount());
 }
 
 function readMachineSettings(): MachineSettings {
@@ -364,6 +395,9 @@ function feedMachine(preset = activePreset, preserveTracking = false): RapierBal
   );
   if (!ball) return undefined;
   ball.body.setAngvel(solution.angularVelocity, true);
+  // solveLaunch can stall the main thread; clear pending physics so the ball
+  // is drawn at the nozzle for at least one frame instead of jumping mid-arc.
+  resetStepAccumulator();
   deps.machineBallMeta.set(ball.body, {
     presetId: preset.id,
     countedLanding: false,

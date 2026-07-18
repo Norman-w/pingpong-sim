@@ -65,8 +65,8 @@ export interface TopicDemoApi {
 //#region 私有成员
 const DEMO_SCENARIOS: Record<Exclude<DemoId, 'topspin'>, DemoScenario> = {
   'child-lob': {
-    presetId: 'lob', eyeHeightMm: 950, stance: 'far', lane: 'middle',
-    technique: 'smash', strength: 100, playerLevel: 'club', receiverLevel: 'club',
+    presetId: 'lob', eyeHeightMm: 950, stance: 'far', lane: 'random',
+    technique: 'smash', strength: 100, playerLevel: 'club', receiverLevel: 'beginner',
   },
   'child-triangle': {
     presetId: 'float-short', eyeHeightMm: 950, stance: 'near', lane: 'forehand',
@@ -233,8 +233,9 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   randomizeEl.checked = id === 'child-lob';
   deps.trackingDemo.setContinuousChecked(false);
   if (id === 'child-lob') {
-    // Continuous random depths: each cycle = live follow ×2 + slow follow ×2.
-    deps.machineUiApi.rollAndLockLobDemoDepth();
+    // Continuous full-table targets: each cycle = live follow ×2 + slow follow ×2.
+    deps.machineUiApi.rollAndLockLobDemoTarget();
+    deps.machineUiApi.setBallStyle('white-yellow-eight');
     deps.trackingReplay.configureFollowOnlyDemoPlayback({
       livePasses: 2,
       slowPasses: 2,

@@ -258,10 +258,9 @@ export function solveLaunch(
     : (preset.targetDepthMm + (preset.mode === 'serve' ? 0 : rallyDepthBiasMm(settings.playerLevel))) / 1000 +
       (settings.randomize ? centeredNoise(random) * preset.spreadMm * level.accuracyScale / 1000 : 0);
   let targetZ = randomTargetZ(settings, preset.spreadMm, level.accuracyScale, random);
-  // Keep lob landings in a band that usually carries the next bounce off the table
-  // while still offering near-net vs deeper variety for teaching.
+  // Full receiver half: just past the net through near the end line.
   if (preset.id === 'lob') {
-    targetX = Math.max(1.86, Math.min(2.30, targetX));
+    targetX = Math.max(1.52, Math.min(2.62, targetX));
   }
   if (preset.mode === 'serve') {
     // A legal table-tennis serve first descends onto the server's half, then
@@ -451,7 +450,13 @@ export function solveLaunch(
     }
     const clearanceError = desiredNetY - result.netY;
     if (Math.abs(clearanceError) < 0.004) break;
-    originY = Math.max(0.90, Math.min(1.75, originY + clearanceError));
+    // Lobs must leave a realistic robot mouth height; climb with vy, not by
+    // lifting the spawn point into mid-air in front of the nozzle.
+    if (preset.id === 'lob') {
+      originY = Math.max(1.05, Math.min(1.18, originY + clearanceError * 0.2));
+    } else {
+      originY = Math.max(0.90, Math.min(1.75, originY + clearanceError));
+    }
   }
 
   const vx = Math.sqrt(Math.max(1, speed * speed - vz * vz));

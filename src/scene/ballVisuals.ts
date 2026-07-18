@@ -126,9 +126,18 @@ export function initBallVisuals(deps: {
     mesh.position.set(x, y, z);
     scene.add(mesh);
     const ball = createBall(x, y, z, vx, vy, vz, mesh);
-    if (!ball) scene.remove(mesh);
+    if (!ball) {
+      scene.remove(mesh);
+      return undefined;
+    }
+    // Keep the render mesh locked to the rigid body immediately (mm), so the
+    // first painted frame is at the nozzle even before the next syncMeshes.
+    const p = ball.body.translation();
+    const r = ball.body.rotation();
+    mesh.position.set(p.x * 1000, p.y * 1000, p.z * 1000);
+    mesh.quaternion.set(r.x, r.y, r.z, r.w);
     document.getElementById('bc')!.textContent = String(getBallCount());
-    return ball ?? undefined;
+    return ball;
   }
 
   async function dropBall(): Promise<void> {

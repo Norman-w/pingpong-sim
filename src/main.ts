@@ -68,6 +68,10 @@ const receiveStance = initReceiveStance({
   VENUE_WIDTH,
   getActivePreset: () => machineUiApi.activePreset,
   getTargetLane: () => machineUiApi.targetLane,
+  getIntendedLandingMm: () => ({
+    x: machineUiApi.targetMarker.position.x,
+    z: machineUiApi.targetMarker.position.z,
+  }),
   isTrackingReplayMode: () => trackingReplayApi.isReplayMode(),
   getTrackingReplayMesh: () => trackingReplayApi.getReplayMesh(),
   isTrackingEnabled: () => trackingDemoApi.isTrackingEnabled(),
@@ -112,12 +116,14 @@ trackingReplayApi = initTrackingReplay({
   onAutoReplayDisabled: () => trackingDemoApi.resumeContinuousIfActive(),
   onReplayStateChanged: () => trackingDemoApi.updateControlState(),
   onContinuousFollowDemoCycle: () => {
-    // Next random lob depth, then the same live×2 + slow×2 follow playlist.
-    machineUiApi.rollAndLockLobDemoDepth();
+    // Next full-table lob target, then the same live×2 + slow×2 follow playlist.
+    machineUiApi.discardBallsExcept(null);
+    machineUiApi.rollAndLockLobDemoTarget();
     trackingDemoApi.launchNextLiveDemoBall();
   },
 });
 
+let lastT = performance.now();
 trackingDemoApi = initTrackingDemo({
   camera,
   controls,
@@ -129,6 +135,8 @@ trackingDemoApi = initTrackingDemo({
   trackingReplay: trackingReplayApi,
   clearBalls,
   syncWindowIndicators,
+  // After a feed, drop hitch time so the new ball is not stepped mid-arc.
+  onLiveBallLaunched: () => { lastT = performance.now(); },
 });
 
 topicDemoApi = initTopicDemo({
@@ -156,7 +164,7 @@ setResetMachineOnClear(() => {
 machineUiApi.renderPresetButtons();
 machineUiApi.setActivePreset(machineUiApi.activePreset);
 
-let frames = 0, ft = 0, fps = 0, lastT = performance.now();
+let frames = 0, ft = 0, fps = 0;
 let pageHiddenAt: number | null = document.hidden ? lastT : null;
 //#endregion
 
