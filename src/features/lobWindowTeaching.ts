@@ -93,17 +93,30 @@ function applyWindowBGuideAndRetreat(
     ballRadiusMm: deps.BALL_RADIUS,
     postBounceApexSeen: session.lobPostBounceApexSeen,
   });
-  const anchor = recovery ?? { x: ballPoint.x, y: ballPoint.y, z: ballPoint.z };
   if (recovery) {
-    deps.receiveStance.placeContactGuide(new THREE.Vector3(recovery.x, recovery.y, recovery.z), true);
+    if (!session.lobWindowBPoint) {
+      session.lobWindowBPoint = new THREE.Vector3(recovery.x, recovery.y, recovery.z);
+    } else {
+      // Smooth predicted B so cyan + retreat depth do not thrash every frame.
+      session.lobWindowBPoint.x = THREE.MathUtils.lerp(session.lobWindowBPoint.x, recovery.x, 0.18);
+      session.lobWindowBPoint.y = THREE.MathUtils.lerp(session.lobWindowBPoint.y, recovery.y, 0.18);
+      session.lobWindowBPoint.z = THREE.MathUtils.lerp(session.lobWindowBPoint.z, recovery.z, 0.18);
+    }
+    deps.receiveStance.placeContactGuide(session.lobWindowBPoint, true);
     deps.receiveStance.setContactGuideState('hittable');
   }
+  const anchor = session.lobWindowBPoint
+    ?? (recovery ? { x: recovery.x, y: recovery.y, z: recovery.z } : null)
+    ?? { x: ballPoint.x, y: ballPoint.y, z: ballPoint.z };
   const smashForwardMm = CONTACT_TECHNIQUES.smash.forwardMm;
   const stance = retreatStanceForContact(anchor, deps.TABLE_LENGTH, 5000, smashForwardMm);
-  session.lobRetreatStanceX = stance.x;
-  deps.receiveStance.autoDepthOverrideX = stance.x;
+  session.lobRetreatStanceX = session.lobRetreatStanceX === null
+    ? stance.x
+    : THREE.MathUtils.lerp(session.lobRetreatStanceX, stance.x, 0.14);
+  deps.receiveStance.autoDepthOverrideX = session.lobRetreatStanceX;
   if (deps.receiveStance.stanceMode === 'auto') {
-    deps.receiveStance.autoContactZ = THREE.MathUtils.clamp(anchor.z, -1582.5, 57.5);
+    const targetZ = THREE.MathUtils.clamp(anchor.z, -1582.5, 57.5);
+    deps.receiveStance.autoContactZ = THREE.MathUtils.lerp(deps.receiveStance.autoContactZ, targetZ, 0.16);
   }
 }
 //#endregion
@@ -162,6 +175,7 @@ export function createLobSessionFields(): Pick<
   | 'lobPostBounceApexSeen'
   | 'lobWindowAEnteredAt'
   | 'lobWindowAPoint'
+  | 'lobWindowBPoint'
   | 'lobRetreatStanceX'
 > {
   return {
@@ -172,6 +186,7 @@ export function createLobSessionFields(): Pick<
     lobPostBounceApexSeen: false,
     lobWindowAEnteredAt: 0,
     lobWindowAPoint: null,
+    lobWindowBPoint: null,
     lobRetreatStanceX: null,
   };
 }

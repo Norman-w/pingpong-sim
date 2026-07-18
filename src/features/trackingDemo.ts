@@ -226,11 +226,13 @@ function beginTrackingBall(ball: RapierBall, now: number, snapCamera = false, sk
   const velocity = ball.body.linvel();
   const position = ball.body.translation();
   // A receiver watches the server before an opening serve, so there is no
-  // artificial "follow the ball, then look back" detour. The selected
-  // receiver level controls how quickly the serve is read and reacquired.
+  // artificial "follow the ball, then look back" detour. Lob teaching must
+  // keep eyes on the ball through bounce → window A/B; a mid-arc look-back
+  // reads as gaze thrash and loses the second contact point.
+  const isLobPreset = deps.machineUiApi.activePreset.id === 'lob';
   const initialPhase: TrackingPhase = deps.machineUiApi.activePreset.mode === 'serve'
     ? 'reacquire'
-    : skipSourceGlance ? 'follow-contact' : 'follow-launch';
+    : (skipSourceGlance || isLobPreset) ? 'follow-contact' : 'follow-launch';
   trackingSession = {
     ball,
     phase: initialPhase,

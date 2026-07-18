@@ -149,7 +149,9 @@ export function runTrackingDemoFrame(
   if (session.phase === 'post-contact-source') {
     ctx.turnViewAtHumanSpeed(trackingTarget, deltaSeconds);
   } else {
-    deps.controls.target.lerp(trackingTarget, session.phase === 'contact-hold' ? 0.22 : 0.30);
+    const isLobFollow = deps.machineUiApi.activePreset.id === 'lob' || session.lobPreferWindowB;
+    const followRate = session.phase === 'contact-hold' ? 0.22 : isLobFollow ? 0.45 : 0.30;
+    deps.controls.target.lerp(trackingTarget, followRate);
   }
 }
 //#endregion
@@ -244,25 +246,31 @@ function advanceTrackingPhases(
     guide, trajectoryGuide, lobArcGuide, receiveBounceCount,
   } = args;
 
+  const isLobPreset = deps.machineUiApi.activePreset.id === 'lob';
+  // Lob / missed-A recovery: never glance at the machine before real contact.
+  const holdGazeOnBall = isLobPreset || session.lobPreferWindowB;
+
   if (session.phase === 'follow-launch') {
     trackingTarget.copy(ballPoint);
     const passedApex = session.previousVy > 0 && velocity.y <= 0;
     const launchedDownward = now - session.startedAt > 180 && session.previousVy <= 0 && velocity.y <= session.previousVy;
-    if ((passedApex || launchedDownward) && !session.lobPreferWindowB) {
+    if (passedApex || launchedDownward) {
       session.apexPoint.copy(ballPoint);
-      session.phase = 'look-back';
-      session.phaseStartedAt = now;
-      setTrackingStatus('look-back', `最高点约 ${Math.round(ballPoint.y)} mm；短暂确认发球机方向。`);
-    } else if ((passedApex || launchedDownward) && session.lobPreferWindowB) {
-      session.apexPoint.copy(ballPoint);
-      session.phase = 'follow-contact';
-      session.phaseStartedAt = now;
+      if (holdGazeOnBall) {
+        session.phase = 'follow-contact';
+        session.phaseStartedAt = now;
+        setTrackingStatus('follow-contact', '持续跟球至可处理击球点。');
+      } else {
+        session.phase = 'look-back';
+        session.phaseStartedAt = now;
+        setTrackingStatus('look-back', `最高点约 ${Math.round(ballPoint.y)} mm；短暂确认发球机方向。`);
+      }
     }
     return;
   }
 
   if (session.phase === 'look-back') {
-    if (session.lobPreferWindowB) {
+    if (holdGazeOnBall) {
       session.phase = 'follow-contact';
       session.phaseStartedAt = now;
       trackingTarget.copy(ballPoint);
@@ -279,7 +287,13 @@ function advanceTrackingPhases(
   }
 
   if (session.phase === 'reacquire') {
-    trackingTarget.lerp(ballPoint, 0.2);
+    trackingTarget.lerp(ballPoint, holdGazeOnBall ? 0.35 : 0.2);
+    if (holdGazeOnBall && deps.machineUiApi.activePreset.mode !== 'serve') {
+      session.phase = 'follow-contact';
+      session.phaseStartedAt = now;
+      trackingTarget.copy(ballPoint);
+      return;
+    }
     const reacquireMs = deps.machineUiApi.activePreset.mode === 'serve'
       ? receiver.reactionMs + receivePreparationMs(deps.receiveStance.contactTechnique)
       : receiver.reactionMs * 0.4;

@@ -35,6 +35,8 @@ export interface TrackingSession {
   lobPostBounceApexSeen: boolean;
   lobWindowAEnteredAt: number;
   lobWindowAPoint: THREE.Vector3 | null;
+  /** Smoothed cyan target for descending window B (avoids per-frame jumps). */
+  lobWindowBPoint: THREE.Vector3 | null;
   /** Auto footwork depth override while waiting for window B. */
   lobRetreatStanceX: number | null;
 }
