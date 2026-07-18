@@ -40,11 +40,14 @@ export interface ContactGuideApi {
   setContactGuideState: (state: ContactGuideState) => void;
   clearReceiveFailureFeedback: () => void;
   showReceiveFailure: (reason: string) => void;
+  pinMissedPreferredMarker: (point: THREE.Vector3) => void;
+  clearMissedPreferredMarker: () => void;
   updateTechniqueOptions: () => void;
   preferTechniqueForPreset: (preset: ShotPreset) => ContactTechnique;
   availableTechniquesForPreset: (preset: ShotPreset) => ContactTechnique[];
   readonly contactGuideMarker: THREE.Mesh;
   readonly actualContactMarker: THREE.Mesh;
+  readonly missedPreferredMarker: THREE.Mesh;
   readonly contactLink: THREE.Line;
   readonly trackingTrailLine: THREE.Line;
   trackingTrailPoints: THREE.Vector3[];
@@ -62,6 +65,10 @@ const actualContactMarker = new THREE.Mesh(
   new THREE.SphereGeometry(34, 18, 14),
   new THREE.MeshBasicMaterial({ color: 0x35e87b, wireframe: true, transparent: true, opacity: 0.95 }),
 );
+const missedPreferredMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(28, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xff6b4a, wireframe: true, transparent: true, opacity: 0.95 }),
+);
 const contactLink = new THREE.Line(
   new THREE.BufferGeometry(),
   new THREE.LineDashedMaterial({ color: 0x54d6ff, dashSize: 45, gapSize: 24, transparent: true, opacity: 0.7 }),
@@ -70,14 +77,14 @@ const trackingTrailLine = new THREE.Line(
   new THREE.BufferGeometry(),
   new THREE.LineBasicMaterial({ color: 0x9ceaff, transparent: true, opacity: 0.82 }),
 );
-contactGuideMarker.visible = actualContactMarker.visible = contactLink.visible = false;
+contactGuideMarker.visible = actualContactMarker.visible = missedPreferredMarker.visible = contactLink.visible = false;
 trackingTrailLine.visible = false;
 //#endregion
 
 //#region 公开 API
 export function initContactGuide(deps: ContactGuideDeps): ContactGuideApi {
   contactGuideDeps = deps;
-  deps.scene.add(contactGuideMarker, actualContactMarker, contactLink, trackingTrailLine);
+  deps.scene.add(contactGuideMarker, actualContactMarker, missedPreferredMarker, contactLink, trackingTrailLine);
 
   document.querySelectorAll<HTMLButtonElement>('[data-contact-technique]').forEach(button => {
     button.addEventListener('click', () => {
@@ -99,11 +106,14 @@ export function initContactGuide(deps: ContactGuideDeps): ContactGuideApi {
     setContactGuideState,
     clearReceiveFailureFeedback,
     showReceiveFailure,
+    pinMissedPreferredMarker,
+    clearMissedPreferredMarker,
     updateTechniqueOptions,
     preferTechniqueForPreset,
     availableTechniquesForPreset,
     get contactGuideMarker() { return contactGuideMarker; },
     get actualContactMarker() { return actualContactMarker; },
+    get missedPreferredMarker() { return missedPreferredMarker; },
     get contactLink() { return contactLink; },
     get trackingTrailLine() { return trackingTrailLine; },
     get trackingTrailPoints() { return trackingTrailPoints; },
@@ -186,6 +196,15 @@ function showReceiveFailure(reason: string): void {
     flash.classList.remove('active');
     receiveFailureTimer = null;
   }, 720);
+}
+
+function pinMissedPreferredMarker(point: THREE.Vector3): void {
+  missedPreferredMarker.position.copy(point);
+  missedPreferredMarker.visible = true;
+}
+
+function clearMissedPreferredMarker(): void {
+  missedPreferredMarker.visible = false;
 }
 
 function updateTechniqueOptions(): void {

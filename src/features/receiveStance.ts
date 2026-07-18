@@ -92,6 +92,8 @@ export interface ReceiveStanceApi extends ContactGuideApi {
   viewHeightMm: number;
   receiverLevel: PlayerLevel;
   autoContactZ: number;
+  /** When set, auto footwork depth follows this X (mm) instead of technique default. */
+  autoDepthOverrideX: number | null;
 }
 //#endregion
 
@@ -105,6 +107,7 @@ let viewStance: ViewStance = 'mid';
 let stanceMode: StanceMode = 'fixed';
 let receiverLevel: PlayerLevel = 'club';
 let autoContactZ = 0;
+let autoDepthOverrideX: number | null = null;
 let activeQuickView: QuickViewId = 'follow';
 let contactTechnique: ContactTechnique = 'forehand-loop';
 let trackedReceiveBounceX: number | null = null;
@@ -228,6 +231,8 @@ export function initReceiveStance(deps: ReceiveStanceDeps): ReceiveStanceApi {
     set receiverLevel(value: PlayerLevel) { receiverLevel = value; },
     get autoContactZ() { return autoContactZ; },
     set autoContactZ(value: number) { autoContactZ = value; },
+    get autoDepthOverrideX() { return autoDepthOverrideX; },
+    set autoDepthOverrideX(value: number | null) { autoDepthOverrideX = value; },
   };
 }
 
@@ -362,6 +367,9 @@ function configuredContactZ(): number {
 }
 
 function autoStanceDepth(technique: ContactTechnique): { x: number; label: string } {
+  if (autoDepthOverrideX !== null) {
+    return { x: autoDepthOverrideX, label: '后退等下降' };
+  }
   const spec = CONTACT_TECHNIQUES[technique];
   if (TABLE_TECHNIQUES.has(technique)) {
     return { x: Math.max(2760, tableTechniqueContactX(technique) + spec.forwardMm), label: '台内近台' };
@@ -422,6 +430,7 @@ function contactFailureReason(ballPoint: THREE.Vector3, guide: THREE.Vector3, ta
 }
 
 function resetAutomaticStance(moveCamera = false): void {
+  autoDepthOverrideX = null;
   if (stanceMode !== 'auto') return;
   autoContactZ = configuredContactZ();
   updateStanceDisplay();

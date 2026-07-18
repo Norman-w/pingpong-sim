@@ -164,3 +164,9 @@ drill-me 已装在 [`.agents/skills/drill-me`](../.agents/skills/drill-me)，实
 - 错过窗口 A 后：镜头**持续跟球**至窗口 B，不出现「回看发球机再甩回球」的抖动
 - 出手前身位表现为后退等下降，而非冲向近网起跳位
 - `npx tsc --noEmit` 通过
+
+## 实现状态
+
+- 第一期已接入：`src/domain/lobProcessability.ts` + `src/features/lobWindowTeaching.ts`，由 `trackingDemo` 在 lob 跟球中驱动
+- 错过 A：`showReceiveFailure` + 橙色 `missedPreferredMarker` + 青点切窗口 B；相位强制 `follow-contact`；`autoDepthOverrideX` 后退等下降
+- 触球后才允许 `post-contact-source` / look-back

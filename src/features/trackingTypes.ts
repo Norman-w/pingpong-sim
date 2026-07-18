@@ -26,6 +26,17 @@ export interface TrackingSession {
   closestPoint: THREE.Vector3;
   closestDistance: number;
   contactFailed: boolean;
+  /** Lob window-A teaching: entered post-bounce early-rise smash window. */
+  lobEnteredWindowA: boolean;
+  lobWindowAMissSignaled: boolean;
+  /** After missing A, keep following to descending window B. */
+  lobPreferWindowB: boolean;
+  lobHandledInWindowA: boolean;
+  lobPostBounceApexSeen: boolean;
+  lobWindowAEnteredAt: number;
+  lobWindowAPoint: THREE.Vector3 | null;
+  /** Auto footwork depth override while waiting for window B. */
+  lobRetreatStanceX: number | null;
 }
 
 export interface TrackingSnapshot {
