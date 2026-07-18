@@ -19,7 +19,11 @@ import {
   beginNextContinuousDemoCycle,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
-import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
+import {
+  activeReplayCueIdAt,
+  advanceTrackingReplaySpin,
+  sampleTrackingReplayFrame,
+} from './trackingReplaySampling';
 
 //#endregion
 
@@ -490,7 +494,6 @@ function finishTrackingReplayCycle(): void {
 }
 
 function syncReplayCueHighlightForTime(time: number): void {
-  if (trackingReplayCuePoints.length === 0) return;
   let active: ReplayCuePoint | null = null;
   for (const cue of trackingReplayCuePoints) {
     if (cue.time <= time + 1e-3) active = cue;
