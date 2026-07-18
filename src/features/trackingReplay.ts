@@ -17,6 +17,7 @@ import {
   takeSlowFollowPlaylist,
   type FollowOnlyDemoPlayback,
 } from './trackingDemoPlayback';
+import { advanceTrackingReplaySpin, sampleTrackingReplayFrame } from './trackingReplaySampling';
 
 //#endregion
 
@@ -332,8 +333,8 @@ function updateReplay(deltaSeconds: number): void {
   // Pause freezes trajectory time/position, but keeps spin running so the
   // observer can still read rotation direction and rate at that instant.
   if (trackingReplayPaused) {
-    const pausedFrame = sampleTrackingReplayFrame(trackingReplayTime);
-    advanceTrackingReplaySpin(pausedFrame.angularVelocity, deltaSeconds);
+    const pausedFrame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
+    advanceTrackingReplaySpin(trackingReplayMesh, pausedFrame.angularVelocity, deltaSeconds, trackingSpeed);
     if (deps.receiveStance.activeQuickView === 'follow') deps.controls.target.copy(trackingReplayMesh.position);
     else {
       updateHighArcFraming({
@@ -349,9 +350,9 @@ function updateReplay(deltaSeconds: number): void {
   const last = trackingRecording[trackingRecording.length - 1];
   const ended = trackingReplayTime >= last.time;
   if (ended) trackingReplayTime = last.time;
-  const frame = sampleTrackingReplayFrame(trackingReplayTime);
+  const frame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
   trackingReplayMesh.position.copy(frame.position);
-  advanceTrackingReplaySpin(frame.angularVelocity, deltaSeconds);
+  advanceTrackingReplaySpin(trackingReplayMesh, frame.angularVelocity, deltaSeconds, trackingSpeed);
   syncReplayCueHighlightForTime(trackingReplayTime);
   if (deps.receiveStance.activeQuickView === 'follow') {
     // Keep the replay ball in the observer's gaze with frame-rate-independent
@@ -440,7 +441,7 @@ function seekTrackingReplayCue(cue: ReplayCuePoint): void {
   trackingReplayTime = cue.time;
   trackingReplayPaused = true;
   trackingReplayActiveCueId = cue.id;
-  const frame = sampleTrackingReplayFrame(trackingReplayTime);
+  const frame = sampleTrackingReplayFrame(trackingRecording, trackingReplayTime);
   trackingReplayMesh.position.copy(frame.position);
   trackingReplayMesh.quaternion.copy(frame.rotation);
   if (deps.receiveStance.activeQuickView === 'follow') deps.controls.target.copy(trackingReplayMesh.position);
@@ -486,36 +487,6 @@ function finishTrackingReplayCycle(): void {
     `可点「播放/重播」再次观看，或点选关键暂停点；关闭慢放回看后继续下一球。`;
 }
 
-function sampleTrackingReplayFrame(time: number): {
-  position: THREE.Vector3;
-  rotation: THREE.Quaternion;
-  angularVelocity: THREE.Vector3;
-} {
-  let right = 1;
-  while (right < trackingRecording.length && trackingRecording[right].time < time) right += 1;
-  const left = Math.max(0, right - 1);
-  const a = trackingRecording[left];
-  const b = trackingRecording[Math.min(right, trackingRecording.length - 1)];
-  const span = Math.max(1e-6, b.time - a.time);
-  const replayAlpha = THREE.MathUtils.clamp((time - a.time) / span, 0, 1);
-  return {
-    position: new THREE.Vector3().lerpVectors(a.position, b.position, replayAlpha),
-    rotation: a.rotation.clone().slerp(b.rotation, replayAlpha),
-    angularVelocity: new THREE.Vector3().lerpVectors(a.angularVelocity, b.angularVelocity, replayAlpha),
-  };
-}
-
-function advanceTrackingReplaySpin(angularVelocity: THREE.Vector3, deltaSeconds: number): void {
-  const angularSpeed = angularVelocity.length();
-  if (angularSpeed <= 1e-6) return;
-  const replayRotationStep = new THREE.Quaternion().setFromAxisAngle(
-    angularVelocity.clone().multiplyScalar(1 / angularSpeed),
-    angularSpeed * deltaSeconds * trackingSpeed,
-  );
-  // Rapier angular velocity is expressed in world space, hence premultiply.
-  trackingReplayMesh.quaternion.premultiply(replayRotationStep).normalize();
-}
-
 function syncReplayCueHighlightForTime(time: number): void {
   if (trackingReplayCuePoints.length === 0) return;
   let active: ReplayCuePoint | null = null;
@@ -527,7 +498,4 @@ function syncReplayCueHighlightForTime(time: number): void {
   trackingReplayActiveCueId = nextId;
   highlightReplayCueButtons();
 }
-//#endregion
-
-//#region 方法/工具
 //#endregion
