@@ -36,9 +36,17 @@ audio/spin-reversal-v01.srt
 - 标题、RPM 数据和条件性结论重新排版到上下安全区；不让竖版裁切掉网、落台位置或“仅代表当前仿真参数”提示。
 - 竖版字幕重新检查换行，单条不超过两行；最终时间码以实际配音为准。
 
-## ChatCut 交接状态
+## 当前导出状态
 
-当前环境没有可调用的 ChatCut 插件或页面，因此这里只完成录制清单、旁白、字幕草稿和剪辑规格。ChatCut 可用后按以下顺序处理：导入 `raw/` → 拼接 S01–S08 → 加入中性普通话配音 → 导入并校正字幕 → 导出横版 → 以同一素材重构竖版 → 检查导出文件的分辨率、帧率、音画同步和条件性科学表述。
+当前环境没有可调用的 ChatCut 插件或页面，因此没有声称使用 ChatCut 完成剪辑。已经用本机原生 AVFoundation 将旁白与动态科普画面合成为可播放的横版 MP4，文件位于仓库外：
+
+```text
+/Users/norman/Movies/pingpong-sim/spin-reversal/exports/spin-reversal-master-1920x1080-v01.mp4
+```
+
+已验收：H.264 视频、MPEG-4 AAC 音频、1920×1080、30 fps、约 92.9 秒；解码得到 2787 帧，多个时间点的画面校验值不同，说明画面确实在运动；音频轨道约 92.8 秒。浏览器播放器中取消静音后，视频从 `currentTime=0` 推进到约 `1.7` 秒，`muted=false`、`readyState=4`。
+
+旁白原始文本、AIFF 和 AAC/M4A 中间文件位于 `audio/`；大体积视频和音频均不进入 Git。若后续 ChatCut 可用，可把该 MP4 作为当前可发布母版或重新导入 `raw/` 的分镜素材，按下方规格重构竖版；当前没有声称已经生成竖版或完成平台发布。
 
 ## 局域网观看入口
 
@@ -50,17 +58,19 @@ http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal
 
 这个地址会自动进入干净舞台、发射标准/高有效摩擦双球并启动自动慢放。要看临界条件，把 `mode=reversal` 改为 `mode=critical`；不带 `recording` 参数时仍是普通交互页面。设备需要与这台 Mac 位于同一局域网，且 Mac 防火墙允许 TCP 5174。
 
-当前已有一段真实 canvas 录制的 WebM 播放片段。播放器目录由另一个局域网静态服务提供：
+播放器目录由另一个局域网静态服务提供。当前页面直接播放带旁白的横版 MP4：
 
 ```sh
 python3 -m http.server 5175 --bind 0.0.0.0 \
   --directory /Users/norman/Movies/pingpong-sim/spin-reversal
 ```
 
-播放器地址：`http://192.168.7.187:5175/`。页面使用 `<video controls>` 播放 `exports/spin-reversal-lan-canvas-v01.webm`，当前片段约 15 秒；它是可播放的验证片段，不等同于最终 90 秒横版母版或 MP4 成片。带 `capture=webm` 的仿真入口会在支持 `MediaRecorder` 的真实 Chrome 中录制并下载新的 WebM：
+播放器地址：`http://192.168.7.187:5175/`。页面使用 `<video controls>` 播放 `exports/spin-reversal-master-1920x1080-v01.mp4`。该文件已经具备音画，可直接下载后在支持 H.264/AAC 的平台上传；发布仍由您手动完成。
+
+仓库外仍保留早期 canvas WebM 验证片段，但它没有旁白，不应作为最终交付：`exports/spin-reversal-lan-canvas-v01.webm`。带 `capture=webm` 的仿真入口仍可在支持 `MediaRecorder` 的真实 Chrome 中录制新的 WebM：
 
 ```text
 http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal&capture=webm
 ```
 
-不要在这一步声称已经生成 MP4，也不要自动发布到乒友群或乒云。
+不要把 WebM 验证片段误报成最终成片，也不要自动发布到乒友群或乒云。
