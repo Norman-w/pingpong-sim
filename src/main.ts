@@ -155,6 +155,15 @@ topicDemoApi = initTopicDemo({
   syncWindowIndicators,
 });
 
+const recordingMode = new URLSearchParams(window.location.search).get('recording');
+const requestedSpinMode = new URLSearchParams(window.location.search).get('mode');
+if (recordingMode === 'spin-reversal') {
+  const spinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
+    ? requestedSpinMode
+    : 'reversal';
+  requestAnimationFrame(() => { void topicDemoApi.startSpinReversalDemo(spinMode); });
+}
+
 setResetMachineOnClear(() => {
   // Only exit when a topic is already running — not during topic startup clearBalls.
   if (topicDemoApi.isDemoActive()) topicDemoApi.exitTopicDemo();
