@@ -27,6 +27,35 @@ let trackingReplayApi!: TrackingReplayApi;
 let trackingDemoApi!: TrackingDemoApi;
 let topicDemoApi!: TopicDemoApi;
 
+function startCanvasRecording(durationMs = 15000): void {
+  const canvas = renderer.domElement as HTMLCanvasElement;
+  if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') return;
+  const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+    .find(candidate => MediaRecorder.isTypeSupported(candidate));
+  if (!mimeType) return;
+
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+  const chunks: Blob[] = [];
+  recorder.addEventListener('dataavailable', event => {
+    if (event.data.size > 0) chunks.push(event.data);
+  });
+  recorder.addEventListener('stop', () => {
+    stream.getTracks().forEach(track => track.stop());
+    const blob = new Blob(chunks, { type: mimeType });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = 'spin-reversal-canvas-v01.webm';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+  });
+  recorder.start(250);
+  window.setTimeout(() => {
+    if (recorder.state !== 'inactive') recorder.stop();
+  }, durationMs);
+}
+
 const { syncWindowIndicators } = initWindowManager({
   isMachineActive: () => machineUiApi?.machineRunning ?? false,
   isTrackingActive: () => trackingDemoApi?.isTrackingEnabled() ?? false,
@@ -157,11 +186,16 @@ topicDemoApi = initTopicDemo({
 
 const recordingMode = new URLSearchParams(window.location.search).get('recording');
 const requestedSpinMode = new URLSearchParams(window.location.search).get('mode');
+const captureMode = new URLSearchParams(window.location.search).get('capture');
 if (recordingMode === 'spin-reversal') {
   const spinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
     ? requestedSpinMode
     : 'reversal';
-  requestAnimationFrame(() => { void topicDemoApi.startSpinReversalDemo(spinMode); });
+  requestAnimationFrame(() => {
+    void topicDemoApi.startSpinReversalDemo(spinMode).then(() => {
+      if (captureMode === 'webm') window.setTimeout(() => startCanvasRecording(), 350);
+    });
+  });
 }
 
 setResetMachineOnClear(() => {

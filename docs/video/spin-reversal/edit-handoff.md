@@ -50,4 +50,17 @@ http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal
 
 这个地址会自动进入干净舞台、发射标准/高有效摩擦双球并启动自动慢放。要看临界条件，把 `mode=reversal` 改为 `mode=critical`；不带 `recording` 参数时仍是普通交互页面。设备需要与这台 Mac 位于同一局域网，且 Mac 防火墙允许 TCP 5174。
 
+当前已有一段真实 canvas 录制的 WebM 播放片段。播放器目录由另一个局域网静态服务提供：
+
+```sh
+python3 -m http.server 5175 --bind 0.0.0.0 \
+  --directory /Users/norman/Movies/pingpong-sim/spin-reversal
+```
+
+播放器地址：`http://192.168.7.187:5175/`。页面使用 `<video controls>` 播放 `exports/spin-reversal-lan-canvas-v01.webm`，当前片段约 15 秒；它是可播放的验证片段，不等同于最终 90 秒横版母版或 MP4 成片。带 `capture=webm` 的仿真入口会在支持 `MediaRecorder` 的真实 Chrome 中录制并下载新的 WebM：
+
+```text
+http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal&capture=webm
+```
+
 不要在这一步声称已经生成 MP4，也不要自动发布到乒友群或乒云。
