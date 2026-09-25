@@ -119,15 +119,15 @@ export function spinOverlayStatus(run: SpinReversalRun): string {
 }
 
 export function buildSpinTrajectoryLines(run: SpinReversalRun): THREE.Line[] {
-  const lines: Array<[SpinReversalResult, number, number]> = [
-    [run.standard, -180, 0x54d6ff],
-    [run.comparison, 180, 0xff5d73],
+  const lines: Array<[SpinReversalResult, number]> = [
+    [run.standard, 0x54d6ff],
+    [run.comparison, 0xff5d73],
   ];
-  return lines.map(([result, zOffsetMm, color]) => {
+  return lines.map(([result, color]) => {
     const points = result.points.map(point => new THREE.Vector3(
       point.xMm,
       point.yMm,
-      point.zMm + zOffsetMm,
+      point.zMm,
     ));
     return new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(points),
