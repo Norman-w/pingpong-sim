@@ -389,6 +389,7 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin' | 'spin-revers
 }
 
 async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
+  const recordingSpinDemo = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal';
   if (demoActive) exitTopicDemo();
   closeAllUiPopups();
   deps.trackingDemo.stopTrackingDemo(false);
@@ -398,6 +399,11 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
   deps.receiveStance.contactTechnique = deps.receiveStance.preferTechniqueForPreset(deps.machineUiApi.activePreset);
   deps.receiveStance.updateTechniqueOptions();
   deps.receiveStance.applyDemoObserverSetup({ eyeHeightMm: 1600, stance: 'mid' });
+  // A recording needs a fixed whole-table view: the oblique observer pose can
+  // make the near-side ball look as if it stops at the net. The locked god
+  // view keeps the net on the centreline and both lanes visible throughout;
+  // it changes only presentation, not launch or collision physics.
+  if (recordingSpinDemo) deps.receiveStance.applyQuickView('god');
   deps.machineUiApi.setMachineVisible(false);
   demoActive = true;
   setActiveDemoItem('spin-reversal');
@@ -410,7 +416,6 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
     { result: run.comparison, profile: run.comparisonProfile, zOffsetMm: 180, color: 0xff5d73 },
   ];
   let trackedBall: RapierBall | undefined;
-  const recordingSpinDemo = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal';
   for (const [index, launch] of launches.entries()) {
     const origin = spinOriginFromSolution(run.solution, launch.zOffsetMm);
     const ball = deps.spawnPhysicsBall(
