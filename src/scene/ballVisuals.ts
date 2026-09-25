@@ -6,6 +6,7 @@ import {
   getBalls,
   getBallCount,
   isReady,
+  type BallSpinVisual,
   type RapierBall,
 } from '../physics';
 import type { TableImpactProfile } from '../domain/tableImpact';
@@ -24,6 +25,15 @@ const BALL_RADIUS = 20;
 // render-only mesh so the two moving comparison balls remain legible in a
 // 1920×1080 capture. This does not change any physics or measured trajectory.
 const RECORDING_BALL_SCALE = 3.2;
+// A plain sphere cannot communicate angular direction in a video. The marker
+// is render-only: a bright partial ring and arrowhead rotate with the live
+// angular velocity, without changing the Rapier collider or measurements.
+const SPIN_MARKER_RADIUS = BALL_RADIUS * 1.13;
+const SPIN_MARKER_ARC = Math.PI * 1.55;
+const SPIN_MARKER_COLOR = 0xfff2b5;
+// The marker follows the measured angular-velocity sign, but is deliberately
+// slowed for a 30 fps recording so the arrow direction can be read by eye.
+const SPIN_MARKER_SPEED_SCALE = 0.24;
 const STANDARD_DROP_HEIGHT = 300;
 const SPX = 2055;
 const SPZ = -762;
@@ -50,6 +60,86 @@ export interface BallVisuals {
 //#endregion
 
 //#region 私有成员
+function createRecordingSpinIndicator(): BallSpinVisual & { object3d: THREE.Group } {
+  const group = new THREE.Group();
+  group.name = 'recording-spin-indicator';
+  group.renderOrder = 12;
+  // The endline recording camera looks down the table's X axis. A literal
+  // Z-axis equator would be edge-on from that view, so use a stable billboard
+  // plane while retaining the measured angular-velocity sign for its motion.
+  const cameraPlaneGroup = new THREE.Group();
+  cameraPlaneGroup.rotation.y = Math.PI / 2;
+  group.add(cameraPlaneGroup);
+  const spinGroup = new THREE.Group();
+  cameraPlaneGroup.add(spinGroup);
+
+  const guideMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.26,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const guideRing = new THREE.Mesh(
+    new THREE.TorusGeometry(SPIN_MARKER_RADIUS, 1.4, 6, 64),
+    guideMaterial,
+  );
+  guideRing.renderOrder = 11;
+  guideRing.frustumCulled = false;
+  spinGroup.add(guideRing);
+
+  const material = new THREE.MeshBasicMaterial({
+    color: SPIN_MARKER_COLOR,
+    transparent: true,
+    opacity: 0.98,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(SPIN_MARKER_RADIUS, 2.6, 8, 48, SPIN_MARKER_ARC),
+    material,
+  );
+  ring.renderOrder = 12;
+  ring.frustumCulled = false;
+  spinGroup.add(ring);
+
+  const arrowAngle = SPIN_MARKER_ARC;
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(5.8, 15, 8), material);
+  arrow.position.set(
+    SPIN_MARKER_RADIUS * Math.cos(arrowAngle),
+    SPIN_MARKER_RADIUS * Math.sin(arrowAngle),
+    0,
+  );
+  // ConeGeometry points along +Y. At the end of this arc, +Y is the tangent.
+  arrow.rotation.z = arrowAngle;
+  arrow.renderOrder = 13;
+  arrow.frustumCulled = false;
+  spinGroup.add(arrow);
+
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(3.4, 10, 8), material);
+  tail.position.set(SPIN_MARKER_RADIUS, 0, 0);
+  tail.renderOrder = 13;
+  tail.frustumCulled = false;
+  spinGroup.add(tail);
+
+  let phase = 0;
+  return {
+    object3d: group,
+    update: (angularVelocity, deltaSeconds) => {
+      // The spin-reversal topic uses z as the topspin/backspin axis. Include
+      // the other components in the phase so the marker still communicates
+      // side/cork spin in a normal recording without changing its geometry.
+      const signedRate = angularVelocity.z + angularVelocity.x * 0.35 + angularVelocity.y * 0.15;
+      phase += signedRate * Math.max(0, deltaSeconds) * SPIN_MARKER_SPEED_SCALE;
+      spinGroup.rotation.z = phase;
+      const magnitude = Math.hypot(angularVelocity.x, angularVelocity.y, angularVelocity.z);
+      const visibility = Math.min(1, Math.max(0.32, magnitude / 45));
+      material.opacity = visibility;
+    },
+  };
+}
 //#endregion
 //#region 公开 API
 export function initBallVisuals(deps: {
@@ -142,6 +232,8 @@ export function initBallVisuals(deps: {
       bGeo,
       recordingSpinDemo ? recordingMaterial(color ?? BALL_WHITE) : ballMaterial,
     );
+    const spinVisual = recordingSpinDemo ? createRecordingSpinIndicator() : undefined;
+    if (spinVisual) mesh.add(spinVisual.object3d);
     if (recordingSpinDemo) {
       mesh.scale.setScalar(RECORDING_BALL_SCALE);
       mesh.renderOrder = 5;
@@ -154,6 +246,7 @@ export function initBallVisuals(deps: {
       scene.remove(mesh);
       return undefined;
     }
+    ball.spinVisual = spinVisual;
     // Keep the render mesh locked to the rigid body immediately (mm), so the
     // first painted frame is at the nozzle even before the next syncMeshes.
     const p = ball.body.translation();

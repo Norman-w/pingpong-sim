@@ -108,6 +108,7 @@ export function spinMetricsHtml(run: SpinReversalRun): string {
   return `<strong>蓝色球（标准条件）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
     `<strong>红色球（${run.comparisonProfile.label}）</strong>：第二跳后${spinSenseLabel(run.comparison.finalSense)}<br>` +
     `<span class="spin-rpm-note">仿真读数：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</span><br>` +
+    `<span class="spin-caveat">球面白色箭头环带表示自转方向。</span><br>` +
     `<span class="spin-caveat">结论只对当前这组 3D 仿真条件成立。</span>`;
 }
 
@@ -117,7 +118,7 @@ export function spinOverlayStatus(run: SpinReversalRun): string {
     : run.comparison.outcome === 'near-zero'
       ? '第二跳接近不转'
       : '第二跳仍是下旋';
-  return `蓝色球：下旋减弱但没有反转；红色球：${comparisonOutcome}。只代表当前 3D 仿真条件。`;
+  return `蓝色球：下旋减弱但没有反转；红色球：${comparisonOutcome}。白色箭头环带表示自转方向。`;
 }
 
 export function buildSpinTrajectoryLines(run: SpinReversalRun): THREE.Line[] {

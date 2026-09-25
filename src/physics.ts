@@ -48,12 +48,20 @@ export interface RapierBall {
   body: any;
   collider: any;
   mesh: THREE.Mesh;
+  /** Optional render-only marker used by recording views to show spin direction. */
+  spinVisual?: BallSpinVisual;
   t: number;
   supportedByTable: boolean;
   tableImpacts: number;
   lastTableImpact: { x: number; z: number } | null;
   tableImpactProfile: TableImpactProfile;
   tableImpactHistory: TableImpactEvent[];
+}
+
+export interface BallSpinVisual {
+  /** Render-only group; kept camera-facing instead of inheriting ball tumble. */
+  object3d?: THREE.Object3D;
+  update: (angularVelocity: { x: number; y: number; z: number }, deltaSeconds: number) => void;
 }
 
 const balls: RapierBall[] = [];
@@ -358,12 +366,19 @@ export function step(elapsedSeconds: number): void {
   }
 }
 
-export function syncMeshes(): void {
+export function syncMeshes(deltaSeconds = 0): void {
   if (!readyFlag) return;
   for (const ball of balls) {
     const p = ball.body.translation();
     const r = ball.body.rotation();
     ball.mesh.position.set(p.x * MM_PER_M, p.y * MM_PER_M, p.z * MM_PER_M);
     ball.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+    // The educational marker must remain readable even while the physical
+    // ball tumbles. Its direction still comes from angular velocity, but the
+    // marker's ring is kept in a stable camera-facing plane for recording.
+    if (ball.spinVisual?.object3d) {
+      ball.spinVisual.object3d.quaternion.copy(ball.mesh.quaternion).invert();
+    }
+    ball.spinVisual?.update(ball.body.angvel(), deltaSeconds);
   }
 }
