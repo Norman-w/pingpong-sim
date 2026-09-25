@@ -12,7 +12,7 @@
 └── exports/   # 经过检查的横版和竖版 MP4
 ```
 
-建议输出名：
+目标输出名（当前尚未生成）：
 
 ```text
 exports/spin-reversal-master-1920x1080-v01.mp4
