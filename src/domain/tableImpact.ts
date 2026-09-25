@@ -5,6 +5,10 @@ export const BALL_INERTIA = (2 / 3) * BALL_MASS * BALL_RADIUS ** 2;
 export const TABLE_TOP = 0.785;
 export const TABLE_CONTACT_Y = TABLE_TOP + BALL_RADIUS;
 export const RPM_TO_RAD = 2 * Math.PI / 60;
+// Keep the analytical trajectory and the live Rapier ball on the same small
+// angular damping model. This is an explanatory effective parameter, not a
+// material measurement of a particular ball or atmosphere.
+export const AIR_SPIN_DECAY_RATE = 0.015;
 
 /**
  * These are effective contact profiles for an explanatory simulation. They
@@ -26,8 +30,8 @@ export const TABLE_IMPACT_PROFILES = {
   critical: {
     id: 'critical',
     label: '临界条件',
-    frictionCoefficient: 0.47,
-    note: '第二跳前后接近旋转过零，适合观察临界点。',
+    frictionCoefficient: 0.465,
+    note: '配合当前空气旋转阻尼时，第二跳前后接近旋转过零。',
   },
   'high-grip': {
     id: 'high-grip',
@@ -82,6 +86,17 @@ export function topSpinRpmFromAngularZ(angularZ: number): number {
   return -angularZ / RPM_TO_RAD;
 }
 
+export function applyAirSpinDamping(
+  angularVelocity: { x: number; y: number; z: number },
+  dt: number,
+): void {
+  if (dt <= 0) return;
+  const decay = Math.exp(-AIR_SPIN_DECAY_RATE * dt);
+  angularVelocity.x *= decay;
+  angularVelocity.y *= decay;
+  angularVelocity.z *= decay;
+}
+
 export function classifySpin(topSpinRpm: number, neutralBandRpm = 25): SpinSense {
   if (Math.abs(topSpinRpm) <= neutralBandRpm) return 'neutral';
   return topSpinRpm > 0 ? 'topspin' : 'backspin';
@@ -118,7 +133,9 @@ export function resolveTableImpactKinematics(
     kinematics: {
       linearVelocity: {
         x: v.x + impulseX / BALL_MASS,
-        y: impactSpeed * restitution,
+        // The resolver is normally called on a downward crossing. Preserve
+        // an upward/non-impact input if a caller invokes it defensively.
+        y: impactSpeed > 0 ? impactSpeed * restitution : v.y,
         z: v.z + impulseZ / BALL_MASS,
       },
       angularVelocity: nextAngularVelocity,

@@ -23,6 +23,11 @@ import {
   solveLaunch,
   type TargetLane,
 } from '../src/serveMachine';
+import {
+  applyAirSpinDamping,
+  resolveTableImpactKinematics,
+  TABLE_IMPACT_PROFILES,
+} from '../src/domain/tableImpact';
 import type { TrackingSession } from '../src/features/trackingTypes';
 
 type TestCase = { name: string; run: () => void | Promise<void> };
@@ -240,6 +245,22 @@ test('旋转专题高有效摩擦条件第二跳可以过零并改变接球趋�
   assert(result.impacts.some(impact => impact.spinReversed), '高有效摩擦条件第二跳应过零');
   assertEqual(result.finalSense, 'topspin', '反转后的最终状态应标为上旋');
   assertEqual(result.receiverTrend, 'upward', '上旋在垂直反胶拍面测试中应显示上蹿趋势');
+});
+
+test('台面冲量只处理下落碰撞，不会吞掉向上的竖直速度', () => {
+  const result = resolveTableImpactKinematics({
+    linearVelocity: { x: 1.2, y: 0.8, z: -0.4 },
+    angularVelocity: { x: 0, y: 0, z: 120 },
+  }, TABLE_IMPACT_PROFILES.standard);
+  assertEqual(result.kinematics.linearVelocity.y, 0.8, '非下落输入应保留竖直速度');
+  assertEqual(result.event.normalImpulse, 0, '非下落输入不应产生法向冲量');
+  assertEqual(result.event.tangentialImpulse, 0, '无正压力时不应产生切向摩擦冲量');
+});
+
+test('分析轨迹的空气旋转阻尼会减弱角速度但不改变旋转方向', () => {
+  const angularVelocity = { x: 0, y: 0, z: 100 };
+  applyAirSpinDamping(angularVelocity, 1);
+  assert(angularVelocity.z > 0 && angularVelocity.z < 100, '空气阻尼应减弱角速度且不反向');
 });
 
 export async function runLobTopicRegressionSuite(): Promise<void> {

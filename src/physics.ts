@@ -4,6 +4,7 @@ import {
   BALL_INERTIA,
   BALL_MASS,
   BALL_RADIUS,
+  AIR_SPIN_DECAY_RATE,
   TABLE_IMPACT_PROFILES,
   TABLE_TOP,
   resolveTableImpactKinematics,
@@ -285,7 +286,7 @@ export function createBall(
       .setTranslation(mm(x), mm(y), mm(z))
       .setLinvel(mm(vx), mm(vy), mm(vz))
       .setLinearDamping(0)
-      .setAngularDamping(0.015)
+      .setAngularDamping(AIR_SPIN_DECAY_RATE)
       .setCcdEnabled(true)
       .setAdditionalSolverIterations(4),
   );

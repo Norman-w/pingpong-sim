@@ -103,19 +103,21 @@ export function spinOriginFromSolution(solution: LaunchSolution, zOffsetMm: numb
 }
 
 export function spinMetricsHtml(run: SpinReversalRun): string {
-  return `<strong>同一个初始下旋：${spinRpmLabel(run.standard.initialTopSpinRpm)}</strong><br>` +
-    `标准条件：${spinImpactSummary(run.standard)} → ${spinSenseLabel(run.standard.finalSense)}<br>` +
-    `${run.comparisonProfile.label}：${spinImpactSummary(run.comparison)} → ${spinSenseLabel(run.comparison.finalSense)}<br>` +
-    `<span class="spin-caveat">判定：接球方垂直反胶拍面测试，${run.comparison.receiverTrend === 'upward' ? '更容易上蹿' : run.comparison.receiverTrend === 'downward' ? '更容易下扎' : '趋势接近中性'}。</span>`;
+  const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
+  const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
+  return `<strong>蓝色球（标准条件）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
+    `<strong>红色球（${run.comparisonProfile.label}）</strong>：第二跳后${spinSenseLabel(run.comparison.finalSense)}<br>` +
+    `<span class="spin-rpm-note">仿真读数：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</span><br>` +
+    `<span class="spin-caveat">结论只对当前这组 3D 仿真条件成立。</span>`;
 }
 
 export function spinOverlayStatus(run: SpinReversalRun): string {
   const comparisonOutcome = run.comparison.outcome === 'reversed'
-    ? '第二跳过零变成上旋'
+    ? '第二跳过零，变成上旋'
     : run.comparison.outcome === 'near-zero'
       ? '第二跳接近不转'
       : '第二跳仍是下旋';
-  return `标准条件：第二跳后仍是下旋；${run.comparisonProfile.label}：${comparisonOutcome}。仅代表当前仿真参数。`;
+  return `蓝色球：下旋减弱但没有反转；红色球：${comparisonOutcome}。只代表当前 3D 仿真条件。`;
 }
 
 export function buildSpinTrajectoryLines(run: SpinReversalRun): THREE.Line[] {

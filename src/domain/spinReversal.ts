@@ -4,6 +4,7 @@ import {
   type SimState,
 } from './trajectorySim';
 import {
+  applyAirSpinDamping,
   classifySpin,
   resolveTableImpactKinematics,
   TABLE_CONTACT_Y,
@@ -97,6 +98,7 @@ export function simulateSpinReversal(config: SpinReversalConfig): SpinReversalRe
   for (let step = 0; step < maxSeconds / SIMULATION_DT; step += 1) {
     const previousY = state.y;
     advanceSimulation(state, angularVelocity, SIMULATION_DT);
+    applyAirSpinDamping(angularVelocity, SIMULATION_DT);
     time += SIMULATION_DT;
 
     if (impacts.length < maxImpacts && isTableImpact(state, previousY)) {

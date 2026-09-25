@@ -399,11 +399,10 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
   deps.receiveStance.contactTechnique = deps.receiveStance.preferTechniqueForPreset(deps.machineUiApi.activePreset);
   deps.receiveStance.updateTechniqueOptions();
   deps.receiveStance.applyDemoObserverSetup({ eyeHeightMm: 1600, stance: 'mid' });
-  // A recording needs a fixed whole-table view: the oblique observer pose can
-  // make the near-side ball look as if it stops at the net. The locked god
-  // view keeps the net on the centreline and both lanes visible throughout;
-  // it changes only presentation, not launch or collision physics.
-  if (recordingSpinDemo) deps.receiveStance.applyQuickView('god');
+  // Keep the actual STL table and both physical balls visible in Chromium.
+  // The top-down god view hides the single-sided imported table surface; the
+  // referee view remains a real 3D shot and changes no physics.
+  if (recordingSpinDemo) deps.receiveStance.applyQuickView('endline');
   deps.machineUiApi.setMachineVisible(false);
   demoActive = true;
   setActiveDemoItem('spin-reversal');

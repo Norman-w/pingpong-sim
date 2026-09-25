@@ -1,5 +1,7 @@
 # 横版母版、竖版裁切与媒体交接
 
+> 本文保留早期 ChatCut 交接规格；当前已验收的 v09 三维成片、旁白和字幕见 [`v09-delivery.md`](v09-delivery.md)。
+
 ## 媒体目录
 
 所有原始录屏、配音、剪辑工程和导出视频放在仓库外：
@@ -12,20 +14,20 @@
 └── exports/   # 经过检查的横版和竖版 MP4
 ```
 
-目标输出名（当前尚未生成）：
+当前输出名：
 
 ```text
-exports/spin-reversal-master-1920x1080-v01.mp4
-exports/spin-reversal-vertical-1080x1920-v01.mp4
-audio/narration_zh-CN_neutral_v01.wav
-audio/spin-reversal-v01.srt
+exports/pingpong-spin-reversal-master-v09.mp4
+exports/pingpong-spin-reversal-vertical-v09.mp4
+audio/voiceover_zh-CN_sandy_v09.m4a
+audio/voiceover_zh-CN_sandy_v09.srt
 ```
 
 ## 横版母版
 
 - 画布 1920×1080，30 fps；目标时长约 90 秒。
 - 片头 8 秒使用标题层；标准、临界、反转三段按 S02–S05 顺序排列。
-- 数据卡至少停留 4 秒，给出标准 2304→1644→1087 rpm、临界 2304→1064→约 10 rpm、高有效摩擦 2304→985→上旋 121 rpm，并标注“仿真计算值”。
+- 数据卡至少停留 4 秒，给出标准约 2297→1637→1070 rpm、临界约 2297→1070→-23 rpm、高有效摩擦约 2297→978→上旋 126 rpm，并标注“仿真计算值”。
 - 慢放段只把第二跳前后放大或定格，不把网页自动回放描述成可交互的媒体暂停功能。
 - 字幕保持在安全区，避免遮挡球台、网和 RPM 卡片；重要结论同时使用短字卡和旁白。
 

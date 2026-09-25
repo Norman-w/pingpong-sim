@@ -7,6 +7,7 @@ import {
   RPM_TO_RAD,
   TABLE_CONTACT_Y,
   TABLE_IMPACT_PROFILES,
+  applyAirSpinDamping,
   type TableImpactProfile,
   resolveTableImpactKinematics,
 } from './tableImpact';
@@ -68,13 +69,15 @@ export function simulateToTarget(
   targetX: number,
 ): SimResult {
   const state = { ...origin };
+  const w = { ...angularVelocity };
   const dt = 1 / 480;
   let time = 0;
   let netY = origin.y;
   let recordedNet = false;
 
   while (state.x < targetX && time < 1.5) {
-    advanceSimulation(state, angularVelocity, dt);
+    advanceSimulation(state, w, dt);
+    applyAirSpinDamping(w, dt);
     time += dt;
 
     if (!recordedNet && state.x >= NET_X) {
@@ -104,6 +107,7 @@ export function evaluateServe(
   for (let t = 0; t < 1.5 && state.x < 3.2 && state.y > 0; t += dt) {
     const previousY = state.y;
     advanceSimulation(state, w, dt);
+    applyAirSpinDamping(w, dt);
     if (!sawNet && hits.length > 0 && state.x >= NET_X) { netY = state.y; sawNet = true; }
     if (
       state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
@@ -131,12 +135,14 @@ export function evaluateRally(
   angularVelocity: { x: number; y: number; z: number },
 ): { impact?: { x: number; z: number }; netY: number } {
   const state = { ...origin };
+  const w = { ...angularVelocity };
   let netY = origin.y;
   let sawNet = false;
   const dt = 1 / 480;
   for (let t = 0; t < 2 && state.x < 4.2 && state.y > 0; t += dt) {
     const previousY = state.y;
-    advanceSimulation(state, angularVelocity, dt);
+    advanceSimulation(state, w, dt);
+    applyAirSpinDamping(w, dt);
     if (!sawNet && state.x >= NET_X) {
       netY = state.y;
       sawNet = true;
@@ -171,6 +177,7 @@ export function sampleTrajectoryDetails(
   for (let t = 0; t < seconds && state.y > 0 && state.x < 3.35 && Math.abs(state.z) < 2.2; t += dt) {
     const previousY = state.y;
     advanceSimulation(state, w, dt);
+    applyAirSpinDamping(w, dt);
     if (
       bounces < 3 && state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
       state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
