@@ -11,6 +11,7 @@ import { initMachineUi, type MachineUiApi } from './features/machineUi';
 import { initTrackingReplay, type TrackingReplayApi } from './features/trackingReplay';
 import { initTrackingDemo, type TrackingDemoApi } from './features/trackingDemo';
 import { initTopicDemo, type TopicDemoApi, type DemoId } from './features/topicDemo';
+import { initRecordingCamera, type RecordingCameraApi } from './features/recordingCamera';
 
 //#endregion
 
@@ -164,7 +165,15 @@ const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.12 : 1;
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
   ? requestedSpinMode
   : 'reversal';
+const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-reversal'
+  ? initRecordingCamera({ camera, controls })
+  : null;
 let recordingDemoRestartTimer: number | null = null;
+
+function startRecordingSpinCycle(): void {
+  recordingCamera?.reset();
+  void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+}
 
 setResetMachineOnClear(() => {
   // Only exit when a topic is already running — not during topic startup clearBalls.
@@ -237,6 +246,7 @@ function animate(): void {
   syncMeshes((elapsedMs / 1000) * recordingPhysicsTimeScale);
   trackingDemoApi.updateTrackingDemo(now, elapsedMs / 1000);
   trackingReplayApi.updateReplay(elapsedMs / 1000);
+  recordingCamera?.update(elapsedMs / 1000);
 
   for (const ball of getBalls()) {
     const meta = machineBallMeta.get(ball.body);
@@ -289,7 +299,7 @@ function animate(): void {
     document.getElementById('fps')!.textContent = String(fps);
   }
   trackingReplayApi.syncSpinBillboardPosition();
-  controls.update();
+  if (!recordingCamera) controls.update();
   renderer.render(scene, camera);
 }
 
@@ -316,13 +326,13 @@ initPhysics().then(() => {
   // world is not ready yet.
   if (recordingMode === 'spin-reversal') {
     requestAnimationFrame(() => {
-      void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+      startRecordingSpinCycle();
     });
     // Give an external recorder a continuous live shot. Each restart clears
     // the old pair and launches the same comparison again, so a long take
     // does not end on an empty table after the first pair leaves the venue.
     recordingDemoRestartTimer = window.setInterval(() => {
-      if (!document.hidden) void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+      if (!document.hidden) startRecordingSpinCycle();
     }, 8500);
   }
   animate();

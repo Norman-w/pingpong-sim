@@ -1,8 +1,8 @@
 # 「一个球可以即是上旋球又是下旋球吗？」录屏与科普口径
 
-状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，旁白和字幕交接包在仓库外；ChatCut 仍不可调用。
+状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜；旁白和字幕交接包在仓库外，ChatCut 仍不可调用。
 
-录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)，本次 v09 交付说明见 [`v09-delivery.md`](video/spin-reversal/v09-delivery.md)。
+录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)，当前动态运镜交付说明见 [`v17-camera-delivery.md`](video/spin-reversal/v17-camera-delivery.md)。
 
 ## 仿真基准
 
@@ -54,6 +54,17 @@
 4. 播放高有效摩擦条件：第二跳后显示“下旋 → 上旋”，停留一秒让观众看清过零。
 5. 补充限制条件：球速、入射角、初始旋转、台面/球/胶皮的有效接触状态都会改变结果。
 6. 结尾给出接球方判断：在相近来球速度、接触高度和拍面角度下，垂直反胶拍面更容易让球上蹿还是下扎，是实战判断线索；它不是旋转物理定义的唯一替代品。
+
+## 当前运镜与成片
+
+录屏模式使用 `src/features/recordingCamera.ts` 的确定性关键帧：开场全景，随后向球台推进，再切到斜侧/侧面视角，最后拉回对照全景。相机每 8.5 秒循环一次，与双球专题自动重启周期对齐；这是真实 Three.js 相机位置、视线和视场角的变化，不是后期对固定画面的假摇镜头。录屏模式下 OrbitControls 被停用，避免把相机写回固定端线视角。
+
+已验收的仓库外成片为：
+
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v17.mp4`
+- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v18.mp4`
+
+两者均为实际 `pingpong-sim` 浏览器录屏合成，含真实三维台面、球网、双球、轨迹线、旋转方向环、字幕和 AAC 音轨；详细抽帧、音频和分辨率检查见 `v17-camera-delivery.md`。原始录屏和导出文件均不进入 Git。
 
 ## 建议旁白
 
