@@ -153,6 +153,17 @@
   .demo-controls input { width:100%; accent-color:#ff5d73; }
   .demo-actions { display:flex; gap:7px; }
   .demo-actions button { flex:1; padding:7px; border-radius:6px; cursor:pointer; border:1px solid #ff697d; background:rgba(255,93,115,.14); color:#ff9aaa; }
+  .spin-profile-buttons { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:8px 0; }
+  .spin-profile-buttons button { min-height:34px; padding:5px 4px; border:1px solid #59647f; border-radius:6px; background:#242940; color:#c5cee0; cursor:pointer; font-size:10px; line-height:1.2; }
+  .spin-profile-buttons button.active { border-color:#ffd166; color:#fff2c2; background:rgba(255,209,102,.16); box-shadow:0 0 0 1px rgba(255,209,102,.18) inset; }
+  .spin-definition { margin-top:7px; padding:7px 8px; border-left:2px solid #54d6ff; border-radius:5px; background:rgba(84,214,255,.07); color:#b9c7dc; line-height:1.5; }
+  .spin-caveat { color:#e8ce87; }
+  .recording-overlay { position:fixed; top:20px; left:50%; z-index:8; display:none; width:min(760px,calc(100vw - 32px)); transform:translateX(-50%); padding:10px 16px; border:1px solid rgba(255,255,255,.18); border-radius:10px; background:rgba(12,16,33,.78); backdrop-filter:blur(9px); color:#f4f7ff; text-align:center; pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,.65); }
+  .recording-overlay.visible { display:block; }
+  body.recording-mode .ui-dock { display:none; }
+  .recording-overlay .kicker { color:#ffd166; font:10px/1.2 monospace; letter-spacing:.12em; text-transform:uppercase; }
+  .recording-overlay h1 { margin-top:4px; font-size:clamp(17px,2.1vw,27px); line-height:1.2; }
+  .recording-overlay p { margin-top:5px; color:#d8e5fb; font-size:12px; line-height:1.35; }
   .demo-legend { margin-top:8px; display:flex; gap:12px; color:#a9b3c5; }
   .demo-legend i { display:inline-block; width:18px; height:3px; margin-right:4px; vertical-align:middle; }
   .demo-metrics { margin-top:8px; padding:7px 8px; border-radius:6px; background:rgba(255,93,115,.08); color:#d7dfef; line-height:1.5; font-variant-numeric:tabular-nums; }
@@ -210,6 +221,11 @@
 <body>
 <div id="c"></div>
 <div id="receive-failure-flash" role="status" aria-live="assertive"><span id="receive-failure-reason">接球失败</span></div>
+<div id="spin-recording-overlay" class="recording-overlay" aria-live="polite">
+  <div class="kicker">乒云仿真专题 · 条件性结论</div>
+  <h1>一个球可以即是上旋球又是下旋球吗？</h1>
+  <p id="spin-recording-status">标准条件：下旋减弱；对照条件：等待发射。</p>
+</div>
 <nav class="ui-dock" aria-label="功能窗口">
   <button class="ui-icon" type="button" data-window-toggle="utility-window" title="工具与说明" aria-label="工具与说明"><i data-lucide="wrench"></i></button>
   <button class="ui-icon is-open" type="button" data-window-toggle="machine-window" title="发球机与击球点" aria-label="发球机与击球点"><i data-lucide="bot"></i></button>
@@ -389,8 +405,24 @@
   <div class="window-body">
   <p class="demo-intro">为录屏讨论准备的开放性问题。点击「演示」开始专题，并自动联动观察与跟球。</p>
   <div class="demo-list">
+    <section class="demo-item" data-demo-item="spin-reversal">
+      <div class="demo-item-head"><div class="demo-item-title">一个球可以即是上旋球又是下旋球吗？<small>下旋减弱、过零与接球方的判断</small></div><button class="demo-quick" type="button" data-demo-start="spin-reversal" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="折叠旋转反转专题" aria-expanded="true"></button></div>
+      <div class="demo-item-body">
+        <p>同一个球先以明确的下旋出手。台面碰撞时，切向摩擦会改变角速度；空气阻力主要让旋转减弱，重力影响落台冲击。标准条件下它仍是下旋，特定有效摩擦条件下可能过零变成上旋。</p>
+        <div class="demo-tags"><span>第一跳：发球方台面</span><span>第二跳：接球方台面</span><span>RPM 过零</span><span>仿真示意</span></div>
+        <div class="spin-profile-buttons" aria-label="旋转条件对照">
+          <button type="button" data-spin-profile="standard" aria-pressed="false">标准 vs 低摩擦</button>
+          <button type="button" data-spin-profile="critical" aria-pressed="false">标准 vs 临界</button>
+          <button class="active" type="button" data-spin-profile="reversal" aria-pressed="true">标准 vs 反转</button>
+        </div>
+        <div class="demo-actions"><button id="spin-reversal-preview">预览轨迹</button><button id="spin-reversal-fire">发射并录屏</button></div>
+        <div class="demo-legend"><span><i style="background:#54d6ff"></i>标准条件</span><span><i style="background:#ff5d73"></i>对照条件</span></div>
+        <div id="spin-reversal-metrics" class="demo-metrics">点击“预览轨迹”查看两次落台前后的上下旋 RPM。</div>
+        <div class="spin-definition">实战判断：在来球速度、接触高度和拍面角度相近时，垂直反胶拍面更容易把球带向上还是向下，可作为接球方的操作性判断；这不是替代旋转物理定义的唯一标准。</div>
+      </div>
+    </section>
     <section class="demo-item" data-demo-item="topspin">
-      <div class="demo-item-head"><div class="demo-item-title">专题 01 · 拉球为什么更易上台<small>旋转、下扎与落台前冲</small></div><button class="demo-quick" type="button" data-demo-start="topspin" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="折叠拉球专题" aria-expanded="true"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 02 · 拉球为什么更易上台<small>旋转、下扎与落台前冲</small></div><button class="demo-quick" type="button" data-demo-start="topspin" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="折叠拉球专题" aria-expanded="true"></button></div>
       <div class="demo-item-body">
         <p>保持相近出射方向，对比无旋与旋转。上旋使大力量球下扎，侧旋使球横向弯曲；落台摩擦再把旋转转成前冲/侧拐。</p>
         <div class="demo-controls">
@@ -404,15 +436,15 @@
       </div>
     </section>
     <section class="demo-item collapsed" data-demo-item="child-lob">
-      <div class="demo-item-head"><div class="demo-item-title">专题 02 · 小朋友眼中的被放高球<small>为什么小孩容易怕放高球</small></div><button class="demo-quick" type="button" data-demo-start="child-lob" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的被放高球" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 03 · 小朋友眼中的被放高球<small>为什么小孩容易怕放高球</small></div><button class="demo-quick" type="button" data-demo-start="child-lob" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的被放高球" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>把视线降到儿童 0.95m，并站到远台跟随高吊球。相同的球会占据更大的仰角、在视野里停留更久，落点和扣杀时机也更难判断。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>远台</span><span>高吊球</span><span>扣杀判断</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-lob-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-lob">儿童视角</button></div></div>
     </section>
     <section class="demo-item collapsed" data-demo-item="child-triangle">
-      <div class="demo-item-head"><div class="demo-item-title">专题 03 · 小朋友眼中的小三角<small>近网短球为什么显得又远又窄</small></div><button class="demo-quick" type="button" data-demo-start="child-triangle" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的小三角" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 04 · 小朋友眼中的小三角<small>近网短球为什么显得又远又窄</small></div><button class="demo-quick" type="button" data-demo-start="child-triangle" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开小朋友眼中的小三角" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>儿童眼高配合近台站位，观察近网边线“小三角”。低视点、较短手臂和更大的上步距离叠加，让短球的落点与第二跳更难同时读清。</p><div class="demo-tags"><span>儿童眼高 0.95m</span><span>正手小三角</span><span>无旋短球</span><span>摆短</span></div><div class="demo-variants"><button type="button" data-demo-variant="child-triangle-adult">成人视角对照</button><button class="primary" type="button" data-demo-start="child-triangle">儿童视角</button></div></div>
     </section>
     <section class="demo-item collapsed" data-demo-item="low-stance">
-      <div class="demo-item-head"><div class="demo-item-title">专题 04 · 为什么基本功也要压低重心<small>看清弧线、找到击球点、稳定移动</small></div><button class="demo-quick" type="button" data-demo-start="low-stance" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开压低重心专题" aria-expanded="false"></button></div>
+      <div class="demo-item-head"><div class="demo-item-title">专题 05 · 为什么基本功也要压低重心<small>看清弧线、找到击球点、稳定移动</small></div><button class="demo-quick" type="button" data-demo-start="low-stance" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="展开压低重心专题" aria-expanded="false"></button></div>
       <div class="demo-item-body"><p>用同一条前冲弧圈对照 1.8m 直立视线与 1.35m 压低重心。较低且稳定的视线更接近球的飞行层，弧线、弹跳和建议击球点更容易形成连续参照。</p><div class="demo-tags"><span>同球路对照</span><span>自动移动</span><span>前冲弧圈</span><span>快带/挡</span></div><div class="demo-variants"><button type="button" data-demo-variant="stance-high">高重心 1.8m</button><button class="primary" type="button" data-demo-start="low-stance">压低重心 1.35m</button></div></div>
     </section>
     <section class="demo-item collapsed pending" data-demo-item="more">

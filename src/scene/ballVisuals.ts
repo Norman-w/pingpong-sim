@@ -8,6 +8,7 @@ import {
   isReady,
   type RapierBall,
 } from '../physics';
+import type { TableImpactProfile } from '../domain/tableImpact';
 import { type BallStyle } from '../serveMachine';
 //#endregion
 
@@ -34,6 +35,7 @@ export interface BallVisuals {
     x: number, y: number, z: number,
     vx: number, vy: number, vz: number,
     color?: number,
+    tableImpactProfile?: TableImpactProfile,
   ) => RapierBall | undefined;
   dropBall: () => Promise<void>;
   dropBalls: (n: number) => Promise<void>;
@@ -120,12 +122,13 @@ export function initBallVisuals(deps: {
     x: number, y: number, z: number,
     vx: number, vy: number, vz: number,
     color?: number,
+    tableImpactProfile?: TableImpactProfile,
   ): RapierBall | undefined {
     const mesh = new THREE.Mesh(bGeo, ballMaterial);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.position.set(x, y, z);
     scene.add(mesh);
-    const ball = createBall(x, y, z, vx, vy, vz, mesh);
+    const ball = createBall(x, y, z, vx, vy, vz, mesh, tableImpactProfile);
     if (!ball) {
       scene.remove(mesh);
       return undefined;

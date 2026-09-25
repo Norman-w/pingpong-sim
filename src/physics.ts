@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
+import {
+  BALL_INERTIA,
+  BALL_MASS,
+  BALL_RADIUS,
+  TABLE_IMPACT_PROFILES,
+  TABLE_TOP,
+  resolveTableImpactKinematics,
+  type TableImpactEvent,
+  type TableImpactProfile,
+} from './domain/tableImpact';
 
 // Rapier runs in coherent SI units. Rendering/STL data remains in millimetres.
 const MM_PER_M = 1000;
@@ -7,18 +17,12 @@ const FIXED_DT = 1 / 240;
 const MAX_FRAME_TIME = 0.1;
 
 // ITTF ball and standard atmosphere.
-const BALL_RADIUS = 0.020;
-const BALL_MASS = 0.0027;
 const BALL_AREA = Math.PI * BALL_RADIUS ** 2;
 const BALL_VOLUME = (4 / 3) * Math.PI * BALL_RADIUS ** 3;
-const BALL_INERTIA = (2 / 3) * BALL_MASS * BALL_RADIUS ** 2; // thin spherical shell
 const AIR_DENSITY = 1.204;
 const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
 
-// Experimental ball/table dynamic friction used by the explicit contact impulse.
-const BALL_TABLE_FRICTION = 0.25;
-const TABLE_TOP = 0.785;
 const TABLE_MIN_X = BALL_RADIUS;
 const TABLE_MAX_X = 2.740 - BALL_RADIUS;
 const TABLE_MIN_Z = -1.525 + BALL_RADIUS;
@@ -47,34 +51,13 @@ export interface RapierBall {
   supportedByTable: boolean;
   tableImpacts: number;
   lastTableImpact: { x: number; z: number } | null;
+  tableImpactProfile: TableImpactProfile;
+  tableImpactHistory: TableImpactEvent[];
 }
 
 const balls: RapierBall[] = [];
 
 const mm = (value: number): number => value / MM_PER_M;
-
-// Speed-dependent restitution calibrated to the ITTF table test: a 300 mm
-// drop returns approximately 230 mm (e ~= sqrt(230/300) before air losses).
-// At tiny speeds a zero-restitution dead-band represents real viscoelastic
-// losses and prevents an ideal rigid-body solver from micro-bouncing forever.
-function tableRestitution(impactSpeed: number): number {
-  const calibratedRestitution = THREE.MathUtils.clamp(
-    0.93 - 0.02 * impactSpeed,
-    0.55,
-    0.90,
-  );
-
-  // Real low-speed impacts transition continuously from elastic rebound to
-  // deformation/contact losses. Smoothstep avoids an abrupt "lead ball" stop.
-  const lowSpeedRatio = THREE.MathUtils.clamp(
-    (impactSpeed - 0.005) / (0.30 - 0.005),
-    0,
-    1,
-  );
-  const lowSpeedElasticity =
-    lowSpeedRatio * lowSpeedRatio * (3 - 2 * lowSpeedRatio);
-  return calibratedRestitution * lowSpeedElasticity;
-}
 
 export async function init(): Promise<void> {
   await RAPIER.init();
@@ -218,7 +201,6 @@ function resolveTableImpact(ball: RapierBall): void {
   // explicit response is the single source of normal and tangential impulses.
   const nextY = p.y + v.y * FIXED_DT - 0.5 * GRAVITY * FIXED_DT ** 2;
   if (p.y >= restingHeight - 0.002 && nextY <= restingHeight) {
-    const restitution = tableRestitution(Math.abs(v.y));
     const w = ball.body.angvel();
     ball.tableImpacts += 1;
     ball.lastTableImpact = { x: p.x, z: p.z };
@@ -226,35 +208,24 @@ function resolveTableImpact(ball: RapierBall): void {
     // Tangential contact impulse at the bottom of a hollow sphere. This is
     // what makes topspin kick forward, backspin hold up, and sidespin turn
     // after the bounce instead of behaving like differently coloured flat balls.
-    const contactVx = v.x + w.z * BALL_RADIUS;
-    const contactVz = v.z - w.x * BALL_RADIUS;
-    const contactSpeed = Math.hypot(contactVx, contactVz);
-    let impulseX = 0;
-    let impulseZ = 0;
-    if (contactSpeed > 1e-6) {
-      // Effective tangential mass: 1 / (1/m + r²/I) = 0.4m for a thin shell.
-      const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
-      const normalImpulse = BALL_MASS * (1 + restitution) * Math.abs(v.y);
-      const impulseMagnitude = Math.min(
-        stickingImpulse,
-        BALL_TABLE_FRICTION * normalImpulse,
-      );
-      impulseX = -impulseMagnitude * contactVx / contactSpeed;
-      impulseZ = -impulseMagnitude * contactVz / contactSpeed;
-    }
+    const resolved = resolveTableImpactKinematics({
+      linearVelocity: { x: v.x, y: v.y, z: v.z },
+      angularVelocity: w,
+    }, ball.tableImpactProfile);
+    ball.tableImpactHistory.push(resolved.event);
 
     ball.body.setTranslation({ x: p.x, y: restingHeight, z: p.z }, true);
     ball.body.setLinvel({
-      x: v.x + impulseX / BALL_MASS,
-      y: -v.y * restitution,
-      z: v.z + impulseZ / BALL_MASS,
+      x: resolved.kinematics.linearVelocity.x,
+      y: resolved.kinematics.linearVelocity.y,
+      z: resolved.kinematics.linearVelocity.z,
     }, true);
     ball.body.setAngvel({
-      x: w.x - BALL_RADIUS * impulseZ / BALL_INERTIA,
-      y: w.y,
-      z: w.z + BALL_RADIUS * impulseX / BALL_INERTIA,
+      x: resolved.kinematics.angularVelocity.x,
+      y: resolved.kinematics.angularVelocity.y,
+      z: resolved.kinematics.angularVelocity.z,
     }, true);
-    if (restitution === 0) {
+    if (resolved.kinematics.linearVelocity.y === 0) {
       ball.supportedByTable = true;
       ball.body.setGravityScale(0, true);
     }
@@ -305,6 +276,7 @@ export function createBall(
   x: number, y: number, z: number,
   vx: number, vy: number, vz: number,
   mesh: THREE.Mesh,
+  tableImpactProfile: TableImpactProfile = TABLE_IMPACT_PROFILES.standard,
 ): RapierBall | null {
   if (!world) return null;
 
@@ -326,7 +298,7 @@ export function createBall(
         { x: BALL_INERTIA, y: BALL_INERTIA, z: BALL_INERTIA },
         { x: 0, y: 0, z: 0, w: 1 },
       )
-      .setFriction(BALL_TABLE_FRICTION)
+      .setFriction(TABLE_IMPACT_PROFILES.standard.frictionCoefficient)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
       .setRestitution(0.85)
       .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Multiply),
@@ -341,6 +313,8 @@ export function createBall(
     supportedByTable: false,
     tableImpacts: 0,
     lastTableImpact: null,
+    tableImpactProfile,
+    tableImpactHistory: [],
   };
   balls.push(ball);
   return ball;

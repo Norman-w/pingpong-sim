@@ -5,8 +5,11 @@ import { clampWindowPosition, closeAllUiPopups } from '../ui/windowManager';
 import {
   getPreset,
   sampleTrajectory,
+  TABLE_IMPACT_PROFILES,
   type LaunchSolution,
   type PlayerLevel,
+  type SpinReversalResult,
+  type TableImpactProfile,
   type TargetLane,
 } from '../serveMachine';
 import type { ContactTechnique } from '../domain/contactRules';
@@ -14,13 +17,23 @@ import type { ReceiveStanceApi, ViewStance } from './receiveStance';
 import type { MachineUiApi } from './machineUi';
 import type { TrackingDemoApi } from './trackingDemo';
 import type { TrackingReplayApi } from './trackingReplay';
+import {
+  buildSpinTrajectoryLines,
+  createSpinReversalRun,
+  spinMetricsHtml,
+  spinOriginFromSolution,
+  spinOverlayStatus,
+  type SpinReversalMode,
+  type SpinReversalRun,
+} from './spinReversalDemo';
+export type { SpinReversalMode } from './spinReversalDemo';
 
 //#endregion
 
 //#region 常量/配置
 //#endregion
 //#region 模型/类型
-export type DemoId = 'topspin' | 'child-lob' | 'child-triangle' | 'low-stance';
+export type DemoId = 'topspin' | 'spin-reversal' | 'child-lob' | 'child-triangle' | 'low-stance';
 export type DemoVariant = 'child-lob-adult' | 'child-triangle-adult' | 'stance-high';
 
 interface DemoScenario {
@@ -42,6 +55,7 @@ export interface TopicDemoDeps {
     x: number, y: number, z: number,
     vx: number, vy: number, vz: number,
     color?: number,
+    tableImpactProfile?: TableImpactProfile,
   ) => RapierBall | undefined;
   clearBalls: () => Promise<void>;
   machineUiApi: MachineUiApi;
@@ -55,17 +69,26 @@ export interface TopicDemoApi {
   fireDemo: () => Promise<void>;
   updateDemo: () => void;
   clearDemoLines: () => void;
-  startPresetTopicDemo: (id: Exclude<DemoId, 'topspin'>, variant?: DemoVariant) => Promise<void>;
+  startPresetTopicDemo: (id: Exclude<DemoId, 'topspin' | 'spin-reversal'>, variant?: DemoVariant) => Promise<void>;
+  startSpinReversalDemo: (mode?: SpinReversalMode) => Promise<void>;
   setActiveDemoItem: (id: DemoId | null) => void;
   isDemoActive: () => boolean;
   setDemoActive: (value: boolean) => void;
   /** Leave topic mode: stop follow playlist and restore default replay-view checks. */
   exitTopicDemo: () => void;
 }
+
+export interface TopicDemoExitActions {
+  stopTracking: (resetStatus: boolean) => void;
+  clearPlaybackPlan: () => void;
+  unlockTargetDepth: () => void;
+  showMachine: () => void;
+  syncIndicators: () => void;
+}
 //#endregion
 
 //#region 私有成员
-const DEMO_SCENARIOS: Record<Exclude<DemoId, 'topspin'>, DemoScenario> = {
+const DEMO_SCENARIOS: Record<Exclude<DemoId, 'topspin' | 'spin-reversal'>, DemoScenario> = {
   'child-lob': {
     presetId: 'lob', eyeHeightMm: 950, stance: 'far', lane: 'random',
     technique: 'smash', strength: 100, playerLevel: 'club', receiverLevel: 'beginner',
@@ -89,6 +112,8 @@ let randomizeEl!: HTMLInputElement;
 let demoPowerEl!: HTMLInputElement;
 let demoSpinEl!: HTMLInputElement;
 let demoSideEl!: HTMLInputElement;
+let spinReversalMode: SpinReversalMode = 'reversal';
+let currentSpinRun: SpinReversalRun | null = null;
 const demoLines: THREE.Line[] = [];
 let demoActive = false;
 
@@ -130,6 +155,34 @@ function demoSolutions(): [LaunchSolution, LaunchSolution] {
   const flat: LaunchSolution = { ...spun, angularVelocity: { x: 0, y: 0, z: 0 }, spinRpm: 0 };
   return [flat, spun];
 }
+
+function setSpinRecordingOverlay(visible: boolean, run: SpinReversalRun | null = currentSpinRun, cleanStage = false): void {
+  const overlay = document.getElementById('spin-recording-overlay');
+  const status = document.getElementById('spin-recording-status');
+  overlay?.classList.toggle('visible', visible);
+  document.body.classList.toggle('recording-mode', cleanStage);
+  if (!status || !run) return;
+  status.textContent = spinOverlayStatus(run);
+}
+
+function renderSpinReversal(mode: SpinReversalMode): void {
+  spinReversalMode = mode;
+  const run = createSpinReversalRun(mode);
+  currentSpinRun = run;
+  const metrics = document.getElementById('spin-reversal-metrics');
+  if (metrics) metrics.innerHTML = spinMetricsHtml(run);
+  setSpinRecordingOverlay(true, run);
+  document.querySelectorAll<HTMLButtonElement>('[data-spin-profile]').forEach(button => {
+    button.classList.toggle('active', button.dataset.spinProfile === mode);
+    button.setAttribute('aria-pressed', String(button.dataset.spinProfile === mode));
+  });
+  clearDemoLines();
+  if (!demoActive) return;
+  for (const line of buildSpinTrajectoryLines(run)) {
+    deps.scene.add(line);
+    demoLines.push(line);
+  }
+}
 //#endregion
 
 //#region 公开 API
@@ -165,14 +218,30 @@ export function initTopicDemo(topicDemoDeps: TopicDemoDeps): TopicDemoApi {
     button.addEventListener('click', () => {
       const id = button.dataset.demoStart as DemoId;
       if (id === 'topspin') void fireDemo();
+      else if (id === 'spin-reversal') void startSpinReversalDemo();
       else void startPresetTopicDemo(id);
     });
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-spin-profile]').forEach(button => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.spinProfile as SpinReversalMode;
+      renderSpinReversal(mode);
+    });
+  });
+  document.getElementById('spin-reversal-preview')?.addEventListener('click', () => {
+    demoActive = true;
+    deps.machineUiApi.setMachineVisible(false);
+    renderSpinReversal(spinReversalMode);
+    deps.syncWindowIndicators();
+  });
+  document.getElementById('spin-reversal-fire')?.addEventListener('click', () => {
+    void startSpinReversalDemo(spinReversalMode);
   });
   document.querySelectorAll<HTMLButtonElement>('[data-demo-variant]').forEach(button => {
     button.addEventListener('click', () => {
       const variant = button.dataset.demoVariant as DemoVariant;
       const item = button.closest<HTMLElement>('[data-demo-item]');
-      const id = item?.dataset.demoItem as Exclude<DemoId, 'topspin'> | undefined;
+      const id = item?.dataset.demoItem as Exclude<DemoId, 'topspin' | 'spin-reversal'> | undefined;
       if (id) void startPresetTopicDemo(id, variant);
     });
   });
@@ -202,6 +271,7 @@ export function initTopicDemo(topicDemoDeps: TopicDemoDeps): TopicDemoApi {
     updateDemo,
     clearDemoLines,
     startPresetTopicDemo,
+    startSpinReversalDemo,
     setActiveDemoItem,
     isDemoActive: () => demoActive,
     setDemoActive: (value: boolean) => { demoActive = value; },
@@ -216,11 +286,24 @@ function exitTopicDemo(): void {
   demoActive = false;
   setActiveDemoItem(null);
   clearDemoLines();
-  deps.trackingDemo.stopTrackingDemo(true);
-  deps.trackingReplay.clearDemoPlaybackPlan();
-  deps.machineUiApi.lockTargetDepthMm(null);
-  deps.machineUiApi.setMachineVisible(true);
-  deps.syncWindowIndicators();
+  currentSpinRun = null;
+  setSpinRecordingOverlay(false, null);
+  performTopicDemoExit({
+    stopTracking: deps.trackingDemo.stopTrackingDemo,
+    clearPlaybackPlan: deps.trackingReplay.clearDemoPlaybackPlan,
+    unlockTargetDepth: () => deps.machineUiApi.lockTargetDepthMm(null),
+    showMachine: () => deps.machineUiApi.setMachineVisible(true),
+    syncIndicators: deps.syncWindowIndicators,
+  });
+}
+
+/** Testable boundary for every state restoration required when leaving a topic. */
+export function performTopicDemoExit(actions: TopicDemoExitActions): void {
+  actions.stopTracking(true);
+  actions.clearPlaybackPlan();
+  actions.unlockTargetDepth();
+  actions.showMachine();
+  actions.syncIndicators();
 }
 
 function clearDemoLines(): void {
@@ -252,7 +335,8 @@ function updateDemo(): void {
   });
 }
 
-async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: DemoVariant): Promise<void> {
+async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin' | 'spin-reversal'>, variant?: DemoVariant): Promise<void> {
+  setSpinRecordingOverlay(false, null);
   const base = DEMO_SCENARIOS[id];
   const scenario: DemoScenario = { ...base };
   if (variant === 'child-lob-adult' || variant === 'child-triangle-adult') scenario.eyeHeightMm = 1600;
@@ -301,8 +385,53 @@ async function startPresetTopicDemo(id: Exclude<DemoId, 'topspin'>, variant?: De
   deps.syncWindowIndicators();
 }
 
+async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
+  if (demoActive) exitTopicDemo();
+  closeAllUiPopups();
+  deps.trackingDemo.stopTrackingDemo(false);
+  await deps.clearBalls();
+  deps.machineUiApi.setMachineRunning(false);
+  deps.machineUiApi.setActivePreset(getPreset('serve-back-short'), false);
+  deps.receiveStance.contactTechnique = deps.receiveStance.preferTechniqueForPreset(deps.machineUiApi.activePreset);
+  deps.receiveStance.updateTechniqueOptions();
+  deps.receiveStance.applyDemoObserverSetup({ eyeHeightMm: 1600, stance: 'mid' });
+  deps.machineUiApi.setMachineVisible(false);
+  demoActive = true;
+  setActiveDemoItem('spin-reversal');
+  renderSpinReversal(mode);
+
+  const run = currentSpinRun;
+  if (!run) return;
+  const launches: Array<{ result: SpinReversalResult; profile: TableImpactProfile; zOffsetMm: number; color: number }> = [
+    { result: run.standard, profile: TABLE_IMPACT_PROFILES.standard, zOffsetMm: -180, color: 0x54d6ff },
+    { result: run.comparison, profile: run.comparisonProfile, zOffsetMm: 180, color: 0xff5d73 },
+  ];
+  let trackedBall: RapierBall | undefined;
+  for (const [index, launch] of launches.entries()) {
+    const origin = spinOriginFromSolution(run.solution, launch.zOffsetMm);
+    const ball = deps.spawnPhysicsBall(
+      origin.x * 1000,
+      origin.y * 1000,
+      origin.z * 1000,
+      origin.vx * 1000,
+      origin.vy * 1000,
+      origin.vz * 1000,
+      launch.color,
+      launch.profile,
+    );
+    if (!ball) continue;
+    ball.body.setAngvel(run.solution.angularVelocity, true);
+    if (index === 1) trackedBall = ball;
+  }
+  if (trackedBall) deps.trackingDemo.attachBallToTracking(trackedBall);
+  setSpinRecordingOverlay(true, run, true);
+  closeAllUiPopups();
+  deps.syncWindowIndicators();
+}
+
 async function fireDemo(): Promise<void> {
   // Use the current sliders as-is. Unmodified controls already hold the topic defaults.
+  setSpinRecordingOverlay(false, null);
   closeAllUiPopups();
   await deps.clearBalls();
   deps.machineUiApi.setMachineRunning(false);

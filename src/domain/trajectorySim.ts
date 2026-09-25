@@ -1,20 +1,26 @@
 //#region 导入/依赖
 import { type LaunchSolution } from './shotCatalog';
+import {
+  BALL_INERTIA,
+  BALL_MASS,
+  BALL_RADIUS,
+  RPM_TO_RAD,
+  TABLE_CONTACT_Y,
+  TABLE_IMPACT_PROFILES,
+  type TableImpactProfile,
+  resolveTableImpactKinematics,
+} from './tableImpact';
 //#endregion
 
 //#region 常量/配置
-export const BALL_RADIUS = 0.020;
-export const BALL_MASS = 0.0027;
 export const BALL_AREA = Math.PI * BALL_RADIUS ** 2;
 export const BALL_VOLUME = (4 / 3) * Math.PI * BALL_RADIUS ** 3;
-export const BALL_INERTIA = (2 / 3) * BALL_MASS * BALL_RADIUS ** 2;
-export const BALL_TABLE_FRICTION = 0.25;
+export { BALL_INERTIA, BALL_MASS, BALL_RADIUS, RPM_TO_RAD, TABLE_CONTACT_Y } from './tableImpact';
+export const BALL_TABLE_FRICTION = TABLE_IMPACT_PROFILES.standard.frictionCoefficient;
 const AIR_DENSITY = 1.204;
 const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
-export const TABLE_CONTACT_Y = 0.805;
 export const NET_X = 1.370;
-export const RPM_TO_RAD = 2 * Math.PI / 60;
 //#endregion
 
 //#region 模型/类型
@@ -83,6 +89,7 @@ export function simulateToTarget(
 export function evaluateServe(
   origin: SimState,
   angularVelocity: { x: number; y: number; z: number },
+  tableProfile: TableImpactProfile = TABLE_IMPACT_PROFILES.standard,
 ): {
   first?: { x: number; z: number; time: number };
   second?: { x: number; z: number; time: number };
@@ -103,26 +110,16 @@ export function evaluateServe(
       state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
     ) {
       hits.push({ x: state.x, z: state.z, time: t });
-      const impact = Math.abs(state.vy);
-      const restitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impact));
-      const contactVx = state.vx + w.z * BALL_RADIUS;
-      const contactVz = state.vz - w.x * BALL_RADIUS;
-      const contactSpeed = Math.hypot(contactVx, contactVz);
-      let impulseX = 0;
-      let impulseZ = 0;
-      if (contactSpeed > 1e-6) {
-        const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
-        const normalImpulse = BALL_MASS * (1 + restitution) * impact;
-        const impulseMagnitude = Math.min(stickingImpulse, BALL_TABLE_FRICTION * normalImpulse);
-        impulseX = -impulseMagnitude * contactVx / contactSpeed;
-        impulseZ = -impulseMagnitude * contactVz / contactSpeed;
-      }
+      const impact = resolveTableImpactKinematics({
+        linearVelocity: { x: state.vx, y: state.vy, z: state.vz },
+        angularVelocity: w,
+      }, tableProfile);
       state.y = TABLE_CONTACT_Y;
-      state.vy = impact * restitution;
-      state.vx += impulseX / BALL_MASS;
-      state.vz += impulseZ / BALL_MASS;
-      w.x -= BALL_RADIUS * impulseZ / BALL_INERTIA;
-      w.z += BALL_RADIUS * impulseX / BALL_INERTIA;
+      state.vx = impact.kinematics.linearVelocity.x;
+      state.vy = impact.kinematics.linearVelocity.y;
+      state.vz = impact.kinematics.linearVelocity.z;
+      w.x = impact.kinematics.angularVelocity.x;
+      w.z = impact.kinematics.angularVelocity.z;
       if (hits.length >= 2) break;
     }
   }
@@ -159,6 +156,7 @@ export interface SampledTrajectory {
 export function sampleTrajectoryDetails(
   solution: LaunchSolution,
   seconds = 1.25,
+  tableProfile: TableImpactProfile = TABLE_IMPACT_PROFILES.standard,
 ): SampledTrajectory {
   const w = { ...solution.angularVelocity };
   const state: SimState = {
@@ -177,26 +175,16 @@ export function sampleTrajectoryDetails(
       bounces < 3 && state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
       state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02
     ) {
-      const impact = Math.abs(state.vy);
-      const restitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impact));
-      const contactVx = state.vx + w.z * BALL_RADIUS;
-      const contactVz = state.vz - w.x * BALL_RADIUS;
-      const contactSpeed = Math.hypot(contactVx, contactVz);
-      let impulseX = 0;
-      let impulseZ = 0;
-      if (contactSpeed > 1e-6) {
-        const stickingImpulse = 0.4 * BALL_MASS * contactSpeed;
-        const normalImpulse = BALL_MASS * (1 + restitution) * impact;
-        const impulseMagnitude = Math.min(stickingImpulse, BALL_TABLE_FRICTION * normalImpulse);
-        impulseX = -impulseMagnitude * contactVx / contactSpeed;
-        impulseZ = -impulseMagnitude * contactVz / contactSpeed;
-      }
+      const impact = resolveTableImpactKinematics({
+        linearVelocity: { x: state.vx, y: state.vy, z: state.vz },
+        angularVelocity: w,
+      }, tableProfile);
       state.y = TABLE_CONTACT_Y;
-      state.vy = impact * restitution;
-      state.vx += impulseX / BALL_MASS;
-      state.vz += impulseZ / BALL_MASS;
-      w.x -= BALL_RADIUS * impulseZ / BALL_INERTIA;
-      w.z += BALL_RADIUS * impulseX / BALL_INERTIA;
+      state.vx = impact.kinematics.linearVelocity.x;
+      state.vy = impact.kinematics.linearVelocity.y;
+      state.vz = impact.kinematics.linearVelocity.z;
+      w.x = impact.kinematics.angularVelocity.x;
+      w.z = impact.kinematics.angularVelocity.z;
       tableImpacts.push({ x: state.x * 1000, y: TABLE_CONTACT_Y * 1000, z: state.z * 1000 });
       bounces += 1;
     }

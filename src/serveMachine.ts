@@ -42,6 +42,26 @@ export {
   sampleTrajectoryDetails,
   type SampledTrajectory,
 } from './domain/trajectorySim';
+
+export {
+  profileForSpinReversalMode,
+  simulateSpinReversal,
+  type ReceiverVerticalTrend,
+  type SpinReversalConfig,
+  type SpinReversalImpact,
+  type SpinReversalOutcome,
+  type SpinReversalResult,
+  type SpinTrajectoryPoint,
+} from './domain/spinReversal';
+
+export {
+  classifySpin,
+  TABLE_IMPACT_PROFILES,
+  topSpinRpmFromAngularZ,
+  type SpinSense,
+  type TableImpactProfile,
+  type TableImpactProfileId,
+} from './domain/tableImpact';
 //#endregion
 
 //#region 业务逻辑
