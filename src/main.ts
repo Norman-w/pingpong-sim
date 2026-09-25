@@ -157,14 +157,14 @@ topicDemoApi = initTopicDemo({
 
 const recordingMode = new URLSearchParams(window.location.search).get('recording');
 const requestedSpinMode = new URLSearchParams(window.location.search).get('mode');
-if (recordingMode === 'spin-reversal') {
-  const spinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
-    ? requestedSpinMode
-    : 'reversal';
-  requestAnimationFrame(() => {
-    void topicDemoApi.startSpinReversalDemo(spinMode);
-  });
-}
+// Keep the live comparison balls on screen long enough for an external
+// recorder to show both bounces. The collider, impulses, and resulting RPM
+// values are unchanged; only recording playback time is slowed.
+const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.12 : 1;
+const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
+  ? requestedSpinMode
+  : 'reversal';
+let recordingDemoRestartTimer: number | null = null;
 
 setResetMachineOnClear(() => {
   // Only exit when a topic is already running — not during topic startup clearBalls.
@@ -233,7 +233,7 @@ function animate(): void {
   // Tracking slow motion never changes this physical time step. The ball
   // follows the same trajectory; only camera phase timing/interpolation uses
   // trackingSpeed.
-  physicsStep(elapsedMs / 1000);
+  physicsStep((elapsedMs / 1000) * recordingPhysicsTimeScale);
   syncMeshes();
   trackingDemoApi.updateTrackingDemo(now, elapsedMs / 1000);
   trackingReplayApi.updateReplay(elapsedMs / 1000);
@@ -311,6 +311,20 @@ setInterval(() => {
 }, 5000);
 
 initPhysics().then(() => {
+  // The recording URL must wait for Rapier. Starting the topic one frame
+  // earlier draws the planned paths but drops both physical balls because the
+  // world is not ready yet.
+  if (recordingMode === 'spin-reversal') {
+    requestAnimationFrame(() => {
+      void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+    });
+    // Give an external recorder a continuous live shot. Each restart clears
+    // the old pair and launches the same comparison again, so a long take
+    // does not end on an empty table after the first pair leaves the venue.
+    recordingDemoRestartTimer = window.setInterval(() => {
+      if (!document.hidden) void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+    }, 8500);
+  }
   animate();
 });
 //#endregion

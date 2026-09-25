@@ -170,7 +170,10 @@ function renderSpinReversal(mode: SpinReversalMode): void {
   const run = createSpinReversalRun(mode);
   currentSpinRun = run;
   const metrics = document.getElementById('spin-reversal-metrics');
-  if (metrics) metrics.innerHTML = spinMetricsHtml(run);
+  const metricsHtml = spinMetricsHtml(run);
+  if (metrics) metrics.innerHTML = metricsHtml;
+  const recordingMetrics = document.getElementById('spin-recording-metric-card');
+  if (recordingMetrics) recordingMetrics.innerHTML = metricsHtml;
   setSpinRecordingOverlay(true, run);
   document.querySelectorAll<HTMLButtonElement>('[data-spin-profile]').forEach(button => {
     button.classList.toggle('active', button.dataset.spinProfile === mode);
@@ -407,6 +410,7 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
     { result: run.comparison, profile: run.comparisonProfile, zOffsetMm: 180, color: 0xff5d73 },
   ];
   let trackedBall: RapierBall | undefined;
+  const recordingSpinDemo = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal';
   for (const [index, launch] of launches.entries()) {
     const origin = spinOriginFromSolution(run.solution, launch.zOffsetMm);
     const ball = deps.spawnPhysicsBall(
@@ -423,7 +427,10 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
     ball.body.setAngvel(run.solution.angularVelocity, true);
     if (index === 1) trackedBall = ball;
   }
-  if (trackedBall) deps.trackingDemo.attachBallToTracking(trackedBall);
+  // The external recording uses the live physical balls and the two planned
+  // paths directly. Tracking would add a second replay mesh and wireframe
+  // contact markers on top of the clean comparison shot.
+  if (trackedBall && !recordingSpinDemo) deps.trackingDemo.attachBallToTracking(trackedBall);
   setSpinRecordingOverlay(true, run, true);
   closeAllUiPopups();
   deps.syncWindowIndicators();

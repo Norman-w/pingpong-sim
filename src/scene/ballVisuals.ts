@@ -20,6 +20,10 @@ const BALL_OCTANT_COLORS = [
 const BALL_WHITE = 0xf8fafc;
 const BALL_YELLOW = 0xffdf32;
 const BALL_RADIUS = 20;
+// The recording stage keeps the physical collider at 20 mm, but enlarges the
+// render-only mesh so the two moving comparison balls remain legible in a
+// 1920×1080 capture. This does not change any physics or measured trajectory.
+const RECORDING_BALL_SCALE = 3.2;
 const STANDARD_DROP_HEIGHT = 300;
 const SPX = 2055;
 const SPZ = -762;
@@ -54,6 +58,7 @@ export function initBallVisuals(deps: {
   onClearMachine?: () => void;
 }): BallVisuals {
   const { scene, tableTopY } = deps;
+  const recordingSpinDemo = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal';
   let resetMachineOnClear = deps.onClearMachine ?? ((): void => {});
 
   const bGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 32).toNonIndexed() as THREE.SphereGeometry;
@@ -97,6 +102,15 @@ export function initBallVisuals(deps: {
     vertexColors: true,
     toneMapped: false,
   });
+  const recordingMaterials = new Map<number, THREE.MeshBasicMaterial>();
+
+  function recordingMaterial(color: number): THREE.MeshBasicMaterial {
+    const existing = recordingMaterials.get(color);
+    if (existing) return existing;
+    const material = new THREE.MeshBasicMaterial({ color, toneMapped: false });
+    recordingMaterials.set(color, material);
+    return material;
+  }
 
   function setBallStyle(style: BallStyle): void {
     const palette = BALL_STYLE_PALETTES[style] ?? BALL_STYLE_PALETTES.rainbow;
@@ -124,7 +138,14 @@ export function initBallVisuals(deps: {
     color?: number,
     tableImpactProfile?: TableImpactProfile,
   ): RapierBall | undefined {
-    const mesh = new THREE.Mesh(bGeo, ballMaterial);
+    const mesh = new THREE.Mesh(
+      bGeo,
+      recordingSpinDemo ? recordingMaterial(color ?? BALL_WHITE) : ballMaterial,
+    );
+    if (recordingSpinDemo) {
+      mesh.scale.setScalar(RECORDING_BALL_SCALE);
+      mesh.renderOrder = 5;
+    }
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.position.set(x, y, z);
     scene.add(mesh);
