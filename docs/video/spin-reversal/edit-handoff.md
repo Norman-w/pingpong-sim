@@ -38,15 +38,9 @@ audio/spin-reversal-v01.srt
 
 ## 当前导出状态
 
-当前环境没有可调用的 ChatCut 插件或页面，因此没有声称使用 ChatCut 完成剪辑。已经用本机原生 AVFoundation 将旁白与动态科普画面合成为可播放的横版 MP4，文件位于仓库外：
+当前环境没有可调用的 ChatCut 插件或页面。此前生成的合成 MP4、AI 配音和无声 WebM 已判定为废弃并删除；它们不属于交付物，也不再提供播放器链接。当前只保留可交给 ChatCut 的录制清单、短旁白稿、字幕草稿、参数卡和剪辑规格。
 
-```text
-/Users/norman/Movies/pingpong-sim/spin-reversal/exports/spin-reversal-master-1920x1080-v01.mp4
-```
-
-已验收：H.264 视频、MPEG-4 AAC 音频、1920×1080、30 fps、约 92.9 秒；解码得到 2787 帧，多个时间点的画面校验值不同，说明画面确实在运动；音频轨道约 92.8 秒。浏览器播放器中取消静音后，视频从 `currentTime=0` 推进到约 `1.7` 秒，`muted=false`、`readyState=4`。
-
-旁白原始文本、AIFF 和 AAC/M4A 中间文件位于 `audio/`；大体积视频和音频均不进入 Git。若后续 ChatCut 可用，可把该 MP4 作为当前可发布母版或重新导入 `raw/` 的分镜素材，按下方规格重构竖版；当前没有声称已经生成竖版或完成平台发布。
+正式导出必须由实际录屏素材加中性普通话配音完成，并在导出后检查运动画面、音画同步、字幕、分辨率和音轨；没有这些证据时不要报告“已完成 MP4”。
 
 ## 局域网观看入口
 
@@ -58,19 +52,4 @@ http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal
 
 这个地址会自动进入干净舞台、发射标准/高有效摩擦双球并启动自动慢放。要看临界条件，把 `mode=reversal` 改为 `mode=critical`；不带 `recording` 参数时仍是普通交互页面。设备需要与这台 Mac 位于同一局域网，且 Mac 防火墙允许 TCP 5174。
 
-播放器目录由另一个局域网静态服务提供。当前页面直接播放带旁白的横版 MP4：
-
-```sh
-python3 -m http.server 5175 --bind 0.0.0.0 \
-  --directory /Users/norman/Movies/pingpong-sim/spin-reversal
-```
-
-播放器地址：`http://192.168.7.187:5175/`。页面使用 `<video controls>` 播放 `exports/spin-reversal-master-1920x1080-v01.mp4`。该文件已经具备音画，可直接下载后在支持 H.264/AAC 的平台上传；发布仍由您手动完成。
-
-仓库外仍保留早期 canvas WebM 验证片段，但它没有旁白，不应作为最终交付：`exports/spin-reversal-lan-canvas-v01.webm`。带 `capture=webm` 的仿真入口仍可在支持 `MediaRecorder` 的真实 Chrome 中录制新的 WebM：
-
-```text
-http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal&capture=webm
-```
-
-不要把 WebM 验证片段误报成最终成片，也不要自动发布到乒友群或乒云。
+不要把浏览器预览或未验收录屏误报成最终成片，也不要自动发布到乒友群或乒云。
