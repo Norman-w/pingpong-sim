@@ -61,10 +61,10 @@
 
 已验收的仓库外成片为：
 
-- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v17.mp4`
-- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v18.mp4`
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v18.mp4`
+- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v19.mp4`
 
-两者均为实际 `pingpong-sim` 浏览器录屏合成，含真实三维台面、球网、双球、轨迹线、旋转方向环、字幕和 AAC 音轨；详细抽帧、音频和分辨率检查见 `v17-camera-delivery.md`。原始录屏和导出文件均不进入 Git。
+两者均为实际 `pingpong-sim` 浏览器录屏合成，含真实三维台面、球网、双球、轨迹线、彩色球面分区、字幕和 AAC 音轨；彩色球面直接跟随 Rapier 刚体姿态旋转，不再用屏幕前的箭头环代替自转。详细抽帧、音频和分辨率检查见 `v17-camera-delivery.md`。原始录屏和导出文件均不进入 Git。
 
 ## 建议旁白
 

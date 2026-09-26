@@ -1,17 +1,17 @@
-# 旋转反转专题 v17 动态运镜交付
+# 旋转反转专题动态运镜和彩色球面交付
 
 ## 交付文件
 
 文件在仓库外，避免把大体积媒体提交到 Git：
 
 ```text
-/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v17.mp4
-/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v18.mp4
+/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v18.mp4
+/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v19.mp4
 ```
 
 横版为 1920×1080、30 fps、77.617 秒；竖版为 1080×1920、30 fps、77.617 秒。两条文件各包含 1 条视频轨和 1 条 AAC 音频轨，音频长度约 77.527 秒，抽样解码有非零样本。
 
-画面来源是 `pingpong-sim` 的 Three.js 场景和 Rapier 实时球。成片抽查了开场、标准条件、临界条件、高有效摩擦和结尾段；球、球网、轨迹线、蓝红双球和方向环均可见，横版抽查帧显示相机视角确实发生变化。
+画面来源是 `pingpong-sim` 的 Three.js 场景和 Rapier 实时球。成片抽查了开场、标准条件、临界条件、高有效摩擦和结尾段；球、球网、轨迹线、蓝红双球和彩色球面分区均可见，横版抽查帧显示相机视角确实发生变化。
 
 ## 运镜实现
 
@@ -24,6 +24,12 @@
 5. 7.2–8.5 秒：拉回高位全景，准备下一次条件对照。
 
 相机 `position`、`target`、`fov` 使用平滑插值；录屏模式停用 OrbitControls 的更新，避免控制器把关键帧写回静态视角。相机只改变观察方式，不改变物理时间步、碰撞参数或球路。
+
+## 自转显示
+
+录屏模式直接使用项目已有的八色球面分区材质。每一帧把 Rapier 刚体的真实四元数复制给球面网格，因此彩色分区绕真实的世界空间角速度轴旋转：下旋/上旋绕表面法向切向轴，侧旋和拧腰旋转也会自然叠加。录屏模式不再添加固定在镜头前的箭头环，也不把不同角速度分量混成一个屏幕平面相位。
+
+球体的放大只改变渲染尺寸，碰撞半径、质量、惯量、台面冲量和 RPM 计算不变。
 
 ## 音频和字幕
 
@@ -41,6 +47,6 @@
 
 ## 验收边界
 
-- 已完成：动态 Three.js 相机、双球三维画面、横版母版、竖版裁切、字幕、AAC 音轨、分辨率/帧率/轨道/抽帧检查。
+- 已完成：动态 Three.js 相机、真实刚体姿态驱动的彩色球面、双球三维画面、横版母版、竖版裁切、字幕、AAC 音轨、分辨率/帧率/轨道/抽帧检查。
 - 未执行：ChatCut 轻剪、外部平台发布、乒友群或乒云发布。
 - 发布由项目负责人手动完成；原始 `.mov`、音频和导出 MP4 均保留在 `/Users/norman/Movies/pingpong-sim/spin-reversal/`，不进入 Git。

@@ -243,7 +243,7 @@ function animate(): void {
   // follows the same trajectory; only camera phase timing/interpolation uses
   // trackingSpeed.
   physicsStep((elapsedMs / 1000) * recordingPhysicsTimeScale);
-  syncMeshes((elapsedMs / 1000) * recordingPhysicsTimeScale);
+  syncMeshes();
   trackingDemoApi.updateTrackingDemo(now, elapsedMs / 1000);
   trackingReplayApi.updateReplay(elapsedMs / 1000);
   recordingCamera?.update(elapsedMs / 1000);
