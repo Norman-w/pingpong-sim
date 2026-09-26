@@ -7,10 +7,10 @@ import {
   RPM_TO_RAD,
   TABLE_CONTACT_Y,
   TABLE_IMPACT_PROFILES,
-  applyAirSpinDamping,
   type TableImpactProfile,
   resolveTableImpactKinematics,
 } from './tableImpact';
+import { aerodynamicForces, integrateAerodynamicSpin } from './aerodynamics';
 //#endregion
 
 //#region 常量/配置
@@ -18,8 +18,6 @@ export const BALL_AREA = Math.PI * BALL_RADIUS ** 2;
 export const BALL_VOLUME = (4 / 3) * Math.PI * BALL_RADIUS ** 3;
 export { BALL_INERTIA, BALL_MASS, BALL_RADIUS, RPM_TO_RAD, TABLE_CONTACT_Y } from './tableImpact';
 export const BALL_TABLE_FRICTION = TABLE_IMPACT_PROFILES.standard.frictionCoefficient;
-const AIR_DENSITY = 1.204;
-const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
 export const NET_X = 1.370;
 //#endregion
@@ -39,26 +37,13 @@ export function advanceSimulation(
   angularVelocity: { x: number; y: number; z: number },
   dt: number,
 ): void {
-  const speed = Math.hypot(state.vx, state.vy, state.vz);
-  const dragScale = speed > 1e-6
-    ? -0.5 * AIR_DENSITY * DRAG_COEFFICIENT * BALL_AREA * speed / BALL_MASS
-    : 0;
-  let ax = dragScale * state.vx;
-  let ay = -GRAVITY + dragScale * state.vy;
-  let az = dragScale * state.vz;
-  const crossX = angularVelocity.y * state.vz - angularVelocity.z * state.vy;
-  const crossY = angularVelocity.z * state.vx - angularVelocity.x * state.vz;
-  const crossZ = angularVelocity.x * state.vy - angularVelocity.y * state.vx;
-  const crossMagnitude = Math.hypot(crossX, crossY, crossZ);
-  if (crossMagnitude > 1e-5 && speed > 0.1) {
-    const spinParameter = BALL_RADIUS * crossMagnitude / (speed * speed);
-    const liftCoefficient = 0.5 * (1 - Math.exp(-1.8 * spinParameter));
-    const liftAcceleration = 0.5 * AIR_DENSITY * BALL_AREA * liftCoefficient * speed * speed / BALL_MASS;
-    const scale = liftAcceleration / crossMagnitude;
-    ax += scale * crossX;
-    ay += scale * crossY;
-    az += scale * crossZ;
-  }
+  const aero = aerodynamicForces(
+    { x: state.vx, y: state.vy, z: state.vz },
+    angularVelocity,
+  );
+  const ax = aero.force.x / BALL_MASS;
+  const ay = -GRAVITY + aero.force.y / BALL_MASS;
+  const az = aero.force.z / BALL_MASS;
   state.vx += ax * dt; state.vy += ay * dt; state.vz += az * dt;
   state.x += state.vx * dt; state.y += state.vy * dt; state.z += state.vz * dt;
 }
@@ -77,7 +62,7 @@ export function simulateToTarget(
 
   while (state.x < targetX && time < 1.5) {
     advanceSimulation(state, w, dt);
-    applyAirSpinDamping(w, dt);
+    integrateAerodynamicSpin(w, { x: state.vx, y: state.vy, z: state.vz }, dt);
     time += dt;
 
     if (!recordedNet && state.x >= NET_X) {
@@ -107,7 +92,7 @@ export function evaluateServe(
   for (let t = 0; t < 1.5 && state.x < 3.2 && state.y > 0; t += dt) {
     const previousY = state.y;
     advanceSimulation(state, w, dt);
-    applyAirSpinDamping(w, dt);
+    integrateAerodynamicSpin(w, { x: state.vx, y: state.vy, z: state.vz }, dt);
     if (!sawNet && hits.length > 0 && state.x >= NET_X) { netY = state.y; sawNet = true; }
     if (
       state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
@@ -142,7 +127,7 @@ export function evaluateRally(
   for (let t = 0; t < 2 && state.x < 4.2 && state.y > 0; t += dt) {
     const previousY = state.y;
     advanceSimulation(state, w, dt);
-    applyAirSpinDamping(w, dt);
+    integrateAerodynamicSpin(w, { x: state.vx, y: state.vy, z: state.vz }, dt);
     if (!sawNet && state.x >= NET_X) {
       netY = state.y;
       sawNet = true;
@@ -177,7 +162,7 @@ export function sampleTrajectoryDetails(
   for (let t = 0; t < seconds && state.y > 0 && state.x < 3.35 && Math.abs(state.z) < 2.2; t += dt) {
     const previousY = state.y;
     advanceSimulation(state, w, dt);
-    applyAirSpinDamping(w, dt);
+    integrateAerodynamicSpin(w, { x: state.vx, y: state.vy, z: state.vz }, dt);
     if (
       bounces < 3 && state.vy < 0 && previousY >= TABLE_CONTACT_Y && state.y <= TABLE_CONTACT_Y &&
       state.x >= 0.02 && state.x <= 2.72 && state.z >= -1.505 && state.z <= -0.02

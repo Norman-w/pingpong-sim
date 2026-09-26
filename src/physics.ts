@@ -4,24 +4,19 @@ import {
   BALL_INERTIA,
   BALL_MASS,
   BALL_RADIUS,
-  AIR_SPIN_DECAY_RATE,
   TABLE_IMPACT_PROFILES,
   TABLE_TOP,
   resolveTableImpactKinematics,
   type TableImpactEvent,
   type TableImpactProfile,
 } from './domain/tableImpact';
+import { aerodynamicForces } from './domain/aerodynamics';
 
 // Rapier runs in coherent SI units. Rendering/STL data remains in millimetres.
 const MM_PER_M = 1000;
 const FIXED_DT = 1 / 240;
 const MAX_FRAME_TIME = 0.1;
 
-// ITTF ball and standard atmosphere.
-const BALL_AREA = Math.PI * BALL_RADIUS ** 2;
-const BALL_VOLUME = (4 / 3) * Math.PI * BALL_RADIUS ** 3;
-const AIR_DENSITY = 1.204;
-const DRAG_COEFFICIENT = 0.55;
 const GRAVITY = 9.81;
 
 const TABLE_MIN_X = BALL_RADIUS;
@@ -69,21 +64,21 @@ export async function init(): Promise<void> {
   world.integrationParameters.maxCcdSubsteps = 4;
   world.integrationParameters.numSolverIterations = 8;
 
-  // The model's visible tabletop top is y=785 mm.
+  // The model's visible tabletop top is y=760 mm, matching the ITTF datum.
   const tableBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   // The playing surface is a sensor because its top contact is resolved
   // explicitly below. This avoids a second cached solver impulse.
   world.createCollider(
     RAPIER.ColliderDesc.cuboid(mm(1370), mm(12.5), mm(762.5))
-      .setTranslation(mm(1370), mm(772.5), mm(-762.5))
+      .setTranslation(mm(1370), mm(747.5), mm(-762.5))
       .setSensor(true),
     tableBody,
   );
 
   const netBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(mm(7), mm(76), mm(610))
-      .setTranslation(mm(1370), mm(861), mm(-763))
+    RAPIER.ColliderDesc.cuboid(mm(7), mm(76.25), mm(610))
+      .setTranslation(mm(1370), mm(836.25), mm(-763))
       .setFriction(0.8)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
       .setRestitution(0.45)
@@ -94,10 +89,10 @@ export async function init(): Promise<void> {
   const floorBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
   world.createCollider(
     // Match the visible 14 m × 7 m competition floor. Its top is at the
-    // rubber-mat plane (y=-5 mm), so a resting ball remains visible instead
-    // of sinking below the rendered ground.
+    // rubber-mat plane (y=-30 mm), five millimetres below the shifted table
+    // legs, so a resting ball remains visible instead of sinking below ground.
     RAPIER.ColliderDesc.cuboid(VENUE_LENGTH / 2, 0.001, VENUE_WIDTH / 2)
-      .setTranslation(1.37, -0.006, -0.7625)
+      .setTranslation(1.37, -0.031, -0.7625)
       .setFriction(0.8)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Multiply)
       .setRestitution(0.35)
@@ -112,10 +107,10 @@ export async function init(): Promise<void> {
     { x: number; y: number; z: number },
     { x: number; y: number; z: number },
   ]> = [
-    [{ x: 1.37, y: BARRIER_HEIGHT / 2, z: -0.7625 - VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
-    [{ x: 1.37, y: BARRIER_HEIGHT / 2, z: -0.7625 + VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
-    [{ x: 1.37 - VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
-    [{ x: 1.37 + VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
+    [{ x: 1.37, y: 0.325, z: -0.7625 - VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
+    [{ x: 1.37, y: 0.325, z: -0.7625 + VENUE_WIDTH / 2 }, { x: VENUE_LENGTH / 2, y: BARRIER_HEIGHT / 2, z: BARRIER_THICKNESS / 2 }],
+    [{ x: 1.37 - VENUE_LENGTH / 2, y: 0.325, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
+    [{ x: 1.37 + VENUE_LENGTH / 2, y: 0.325, z: -0.7625 }, { x: BARRIER_THICKNESS / 2, y: BARRIER_HEIGHT / 2, z: VENUE_WIDTH / 2 }],
   ];
   for (const [position, halfExtents] of barrierSpecs) {
     const barrierBody = world.createRigidBody(
@@ -141,37 +136,13 @@ function applyAerodynamics(): void {
     // is not cleared automatically after world.step(). Aerodynamic forces must
     // be recomputed from the current velocity on every fixed step.
     ball.body.resetForces(false);
+    ball.body.resetTorques(false);
 
     const v = ball.body.linvel();
     const w = ball.body.angvel();
-    const speed = Math.hypot(v.x, v.y, v.z);
-    if (speed < 1e-4) continue;
-
-    // Fd = -1/2 rho Cd A |v| v.
-    const dragScale = -0.5 * AIR_DENSITY * DRAG_COEFFICIENT * BALL_AREA * speed;
-    let fx = dragScale * v.x;
-    let fy = dragScale * v.y;
-    let fz = dragScale * v.z;
-
-    // Magnus lift: F = 1/2 rho A Cl v².  Cl is driven by the
-    // dimensionless spin parameter S = r * omega_perpendicular / v.
-    // The previous inverse-omega coefficient cancelled most of the visible
-    // difference between weak and heavy spin.
-    const crossX = w.y * v.z - w.z * v.y;
-    const crossY = w.z * v.x - w.x * v.z;
-    const crossZ = w.x * v.y - w.y * v.x;
-    const crossMagnitude = Math.hypot(crossX, crossY, crossZ);
-    if (crossMagnitude > 1e-5 && speed > 0.1) {
-      const spinParameter = BALL_RADIUS * crossMagnitude / (speed * speed);
-      const liftCoefficient = 0.5 * (1 - Math.exp(-1.8 * spinParameter));
-      const liftForce = 0.5 * AIR_DENSITY * BALL_AREA * liftCoefficient * speed * speed;
-      const liftScale = liftForce / crossMagnitude;
-      fx += liftScale * crossX;
-      fy += liftScale * crossY;
-      fz += liftScale * crossZ;
-    }
-
-    ball.body.addForce({ x: fx, y: fy, z: fz }, true);
+    const aero = aerodynamicForces(v, w);
+    ball.body.addForce(aero.force, true);
+    ball.body.addTorque(aero.torque, true);
 
   }
 }
@@ -286,7 +257,10 @@ export function createBall(
       .setTranslation(mm(x), mm(y), mm(z))
       .setLinvel(mm(vx), mm(vy), mm(vz))
       .setLinearDamping(0)
-      .setAngularDamping(AIR_SPIN_DECAY_RATE)
+      // Angular damping is integrated from the source-backed fluid torque
+      // table in applyAerodynamics(), so Rapier must not add a second
+      // unexplained exponential damping term.
+      .setAngularDamping(0)
       .setCcdEnabled(true)
       .setAdditionalSolverIterations(4),
   );

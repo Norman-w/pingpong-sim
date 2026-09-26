@@ -5,6 +5,9 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 //#region 常量/配置
 const BASE = import.meta.env.BASE_URL;
+const TABLE_TOP_Y_MM = 760;
+const TABLE_SURFACE_SHIFT_Y_MM = -25;
+const NET_HEIGHT_MM = 152.5;
 //#endregion
 
 //#region 模型/类型
@@ -57,6 +60,19 @@ function loadSTL(
       geo => {
         geo.computeVertexNormals();
         geo.rotateX(-Math.PI / 2);
+        if (file === 'table-net.stl') {
+          // The source mesh is authored around the old 785 mm datum and a
+          // 213 mm net. Normalize its post-rotation Y bounds to the ITTF
+          // 760 mm playing surface and 152.5 mm net height.
+          geo.computeBoundingBox();
+          const minY = geo.boundingBox?.min.y ?? TABLE_TOP_Y_MM;
+          const maxY = geo.boundingBox?.max.y ?? (TABLE_TOP_Y_MM + NET_HEIGHT_MM);
+          const scaleY = NET_HEIGHT_MM / Math.max(maxY - minY, 1);
+          geo.translate(0, -minY, 0);
+          geo.scale(1, scaleY, 1);
+          geo.translate(0, TABLE_TOP_Y_MM, 0);
+          geo.computeVertexNormals();
+        }
         const mat = new THREE.MeshPhysicalMaterial({
           color,
           metalness: ml,
@@ -67,6 +83,7 @@ function loadSTL(
           clearcoatRoughness: 0.3,
         });
         const mesh = new THREE.Mesh(geo, mat);
+        if (file !== 'table-net.stl') mesh.position.y = TABLE_SURFACE_SHIFT_Y_MM;
         mesh.castShadow = mesh.receiveShadow = true;
         scene.add(mesh);
         ok(mesh);

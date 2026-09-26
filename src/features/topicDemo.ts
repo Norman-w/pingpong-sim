@@ -12,6 +12,8 @@ import {
   type TableImpactProfile,
   type TargetLane,
 } from '../serveMachine';
+import { aerodynamicForces } from '../domain/aerodynamics';
+import { BALL_MASS } from '../domain/tableImpact';
 import type { ContactTechnique } from '../domain/contactRules';
 import type { ReceiveStanceApi, ViewStance } from './receiveStance';
 import type { MachineUiApi } from './machineUi';
@@ -320,14 +322,18 @@ function updateDemo(): void {
   document.getElementById('demo-side-value')!.textContent = `${Number(demoSideEl.value) > 0 ? '+' : ''}${demoSideEl.value} rpm`;
   const speed = Number(demoPowerEl.value) / 10;
   const omega = Number(demoSpinEl.value) * 2 * Math.PI / 60;
-  const spinParameter = .02 * omega / Math.max(.1, speed);
-  const liftCoefficient = .5 * (1 - Math.exp(-1.8 * spinParameter));
-  const dynamicPressure = .5 * 1.204 * speed * speed;
-  const pressureDifference = dynamicPressure * liftCoefficient;
-  const downwardAcceleration = pressureDifference * Math.PI * .02 ** 2 / .0027;
+  const sideOmega = Number(demoSideEl.value) * 2 * Math.PI / 60;
+  const aero = aerodynamicForces(
+    { x: speed, y: 0, z: 0 },
+    { x: sideOmega * 0.25, y: sideOmega, z: -omega },
+  );
+  const magnusAcceleration = aero.force.y / BALL_MASS;
+  const dragAcceleration = aero.force.x / BALL_MASS;
+  const coefficients = aero.coefficients;
   document.getElementById('demo-metrics')!.innerHTML =
-    `旋转参数 S=${spinParameter.toFixed(2)} · 升力系数 C<sub>L</sub>=${liftCoefficient.toFixed(3)}<br>` +
-    `估算压强差 ${pressureDifference.toFixed(1)}Pa · 额外下坠 ${downwardAcceleration.toFixed(1)}m/s²（${(downwardAcceleration / 9.81).toFixed(2)}g）`;
+    `来源 CFD：C<sub>D</sub>=${coefficients.dragCoefficient.toFixed(3)} · C<sub>M</sub>=${coefficients.magnusCoefficient.toFixed(3)} · c<sub>m</sub>=${coefficients.fluidTorqueCoefficient.toExponential(2)}<br>` +
+    `Re=${coefficients.reynoldsNumber.toFixed(0)} · 马格努斯加速度 ${magnusAcceleration.toFixed(2)}m/s² · 阻力加速度 ${dragAcceleration.toFixed(2)}m/s²` +
+    (coefficients.clampedToSourceDomain ? '<br>当前速度/旋转超出 CFD 表范围，已夹到来源边界' : '');
   clearDemoLines();
   if (!demoActive) return;
   const colors = [0xb8c0cc, 0xff5d73];
@@ -416,7 +422,8 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
   ];
   let trackedBall: RapierBall | undefined;
   for (const [index, launch] of launches.entries()) {
-    const origin = spinOriginFromSolution(run.solution, launch.zOffsetMm);
+    const solution = index === 0 ? run.standardSolution : run.comparisonSolution;
+    const origin = spinOriginFromSolution(solution, launch.zOffsetMm);
     const ball = deps.spawnPhysicsBall(
       origin.x * 1000,
       origin.y * 1000,
@@ -428,7 +435,7 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
       launch.profile,
     );
     if (!ball) continue;
-    ball.body.setAngvel(run.solution.angularVelocity, true);
+    ball.body.setAngvel(solution.angularVelocity, true);
     if (index === 1) trackedBall = ball;
   }
   // The external recording uses the live physical balls and the two planned

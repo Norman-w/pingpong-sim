@@ -20,6 +20,8 @@ export type SpinReversalMode = 'standard' | 'critical' | 'reversal';
 
 export interface SpinReversalRun {
   solution: LaunchSolution;
+  standardSolution: LaunchSolution;
+  comparisonSolution: LaunchSolution;
   standard: SpinReversalResult;
   comparison: SpinReversalResult;
   comparisonProfile: TableImpactProfile;
@@ -33,8 +35,8 @@ function comparisonProfileForMode(mode: SpinReversalMode): TableImpactProfile {
     : profileForSpinReversalMode(mode);
 }
 
-function spinSolution(): LaunchSolution {
-  const preset = getPreset('serve-back-short');
+function spinSolution(topSpinRpm = -3200): LaunchSolution {
+  const preset = { ...getPreset('serve-back-short'), topRpm: topSpinRpm };
   return solveLaunch(preset, {
     strength: 1,
     cadence: preset.cadence,
@@ -42,6 +44,12 @@ function spinSolution(): LaunchSolution {
     randomize: false,
     playerLevel: 'club',
   });
+}
+
+function comparisonTopSpinRpm(mode: SpinReversalMode): number {
+  if (mode === 'critical') return -1980;
+  if (mode === 'reversal') return -1860;
+  return -3200;
 }
 
 function spinOrigin(solution: LaunchSolution, zOffsetMm: number): {
@@ -78,18 +86,24 @@ function spinImpactSummary(result: SpinReversalResult): string {
 
 //#region 公开 API
 export function createSpinReversalRun(mode: SpinReversalMode): SpinReversalRun {
-  const solution = spinSolution();
+  const standardSolution = spinSolution(-3200);
+  const comparisonSolution = spinSolution(comparisonTopSpinRpm(mode));
   const comparisonProfile = comparisonProfileForMode(mode);
   return {
-    solution,
+    // Kept as the baseline alias for existing consumers. New callers should
+    // use the two explicit solutions below because critical/reversal are
+    // different incoming-spin trials under the same physical table model.
+    solution: standardSolution,
+    standardSolution,
+    comparisonSolution,
     standard: simulateSpinReversal({
-      origin: spinOrigin(solution, -180),
-      angularVelocity: solution.angularVelocity,
+      origin: spinOrigin(standardSolution, -180),
+      angularVelocity: standardSolution.angularVelocity,
       tableProfile: TABLE_IMPACT_PROFILES.standard,
     }),
     comparison: simulateSpinReversal({
-      origin: spinOrigin(solution, 180),
-      angularVelocity: solution.angularVelocity,
+      origin: spinOrigin(comparisonSolution, 180),
+      angularVelocity: comparisonSolution.angularVelocity,
       tableProfile: comparisonProfile,
     }),
     comparisonProfile,
@@ -105,9 +119,11 @@ export function spinOriginFromSolution(solution: LaunchSolution, zOffsetMm: numb
 export function spinMetricsHtml(run: SpinReversalRun): string {
   const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
-  return `<strong>蓝色球（标准条件）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
+  return `<strong>蓝色球（来源模型·基线）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
     `<strong>红色球（${run.comparisonProfile.label}）</strong>：第二跳后${spinSenseLabel(run.comparison.finalSense)}<br>` +
     `<span class="spin-rpm-note">仿真读数：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</span><br>` +
+    `<span class="spin-caveat">两条轨迹使用同一来源接触模型（μ=0.25），红球只改变入射初始下旋。</span><br>` +
+    `<span class="spin-caveat">空气系数：CFD 表 2.5–20 m/s、15–90 rps；表外状态按来源边界夹值。</span><br>` +
     `<span class="spin-caveat">球面彩色分区随真实刚体姿态旋转，表示实际自转方向。</span><br>` +
     `<span class="spin-caveat">结论只对当前这组 3D 仿真条件成立。</span>`;
 }
@@ -118,7 +134,7 @@ export function spinOverlayStatus(run: SpinReversalRun): string {
     : run.comparison.outcome === 'near-zero'
       ? '第二跳接近不转'
       : '第二跳仍是下旋';
-  return `蓝色球：下旋减弱但没有反转；红色球：${comparisonOutcome}。球面彩色分区按真实角速度轴旋转。`;
+  return `蓝色球：来源模型基线下旋减弱但没有反转；红色球：${comparisonOutcome}。两球使用同一来源接触模型，只改变入射初始旋转。`;
 }
 
 export function buildSpinTrajectoryLines(run: SpinReversalRun): THREE.Line[] {

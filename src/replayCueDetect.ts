@@ -1,6 +1,6 @@
 //#region 常量/配置
 const TABLE_CENTER_X_MM = 1370;
-const TABLE_TOP_Y_MM = 785;
+const TABLE_TOP_Y_MM = 760;
 const BALL_RADIUS_MM = 20;
 const NEAR_TABLE_Y_MM = TABLE_TOP_Y_MM + BALL_RADIUS_MM + 28;
 const POST_BOUNCE_WINDOW_S = 0.12;

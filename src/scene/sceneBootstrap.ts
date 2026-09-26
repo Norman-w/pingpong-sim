@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 //#endregion
 
 //#region 常量/配置
-const TABLE_TOP_Y = 785;
+const TABLE_TOP_Y = 760;
 const TABLE_LENGTH = 2740;
 const TABLE_WIDTH = 1525;
 const TABLE_CENTER_X = TABLE_LENGTH / 2;
@@ -114,7 +114,7 @@ function addGroundPlane(scene: THREE.Scene): void {
     new THREE.MeshStandardMaterial({ color: 0x0b0d10, roughness: 0.98, metalness: 0 }),
   );
   gp.rotation.x = -Math.PI / 2;
-  gp.position.set(TABLE_CENTER_X, -5, TABLE_CENTER_Z);
+  gp.position.set(TABLE_CENTER_X, -30, TABLE_CENTER_Z);
   gp.receiveShadow = true;
   scene.add(gp);
 }
@@ -201,7 +201,7 @@ function addTableMarkings(scene: THREE.Scene): void {
 function addVenueBarriers(scene: THREE.Scene): void {
   const barrierMaterial = new THREE.MeshStandardMaterial({ color: 0x20262c, roughness: 0.82, metalness: 0.05 });
   const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x3e4852, roughness: 0.6, metalness: 0.12 });
-  const y = 350;
+  const y = 325;
   const xMin = TABLE_CENTER_X - VENUE_LENGTH / 2;
   const xMax = TABLE_CENTER_X + VENUE_LENGTH / 2;
   const zMin = TABLE_CENTER_Z - VENUE_WIDTH / 2;

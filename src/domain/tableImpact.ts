@@ -2,42 +2,56 @@
 export const BALL_RADIUS = 0.020;
 export const BALL_MASS = 0.0027;
 export const BALL_INERTIA = (2 / 3) * BALL_MASS * BALL_RADIUS ** 2;
-export const TABLE_TOP = 0.785;
+// ITTF playing-surface height: 760 mm above the floor. The rendered STL
+// assembly is shifted to this same datum in stlLoader.ts.
+export const TABLE_TOP = 0.760;
 export const TABLE_CONTACT_Y = TABLE_TOP + BALL_RADIUS;
 export const RPM_TO_RAD = 2 * Math.PI / 60;
-// Keep the analytical trajectory and the live Rapier ball on the same small
-// angular damping model. This is an explanatory effective parameter, not a
-// material measurement of a particular ball or atmosphere.
-export const AIR_SPIN_DECAY_RATE = 0.015;
 
 /**
- * These are effective contact profiles for an explanatory simulation. They
- * are not material measurements for every ball, table, or rubber sheet.
+ * Dynamic ball/table friction used by the published contact model. This is a
+ * source-backed value for the model's reference table/ball pair, not a
+ * universal coefficient for every table surface.
+ */
+export const TABLE_DYNAMIC_FRICTION = 0.25;
+export const TABLE_CONTACT_MODEL_SOURCE =
+  'Nature 2026, Outplaying elite table tennis players with an autonomous robot, table-contact model';
+export const TABLE_CONTACT_MODEL_SOURCE_URL =
+  'https://www.nature.com/articles/s41586-026-10338-5';
+
+/**
+ * The three recording labels are different incoming-spin trials. They all use
+ * the same source-backed table contact law; none of them pretends that 0.465 or
+ * 0.50 is a measured material coefficient.
  */
 export const TABLE_IMPACT_PROFILES = {
   'low-grip': {
     id: 'low-grip',
-    label: '低有效摩擦',
-    frictionCoefficient: 0.14,
-    note: '旋转主要减弱，台面传给球的切向冲量较小。',
+    label: '实测模型·基线',
+    frictionCoefficient: TABLE_DYNAMIC_FRICTION,
+    note: '参考球台接触模型：μ=0.25；基线入射下旋约 −3200 rpm。',
+    source: TABLE_CONTACT_MODEL_SOURCE,
   },
   standard: {
     id: 'standard',
-    label: '标准条件',
-    frictionCoefficient: 0.25,
-    note: '采用当前仿真的基准有效摩擦。',
+    label: '实测模型·标准',
+    frictionCoefficient: TABLE_DYNAMIC_FRICTION,
+    note: '参考球台接触模型：μ=0.25；不是某一张球台的通用实测值。',
+    source: TABLE_CONTACT_MODEL_SOURCE,
   },
   critical: {
     id: 'critical',
-    label: '临界条件',
-    frictionCoefficient: 0.465,
-    note: '配合当前空气旋转阻尼时，第二跳前后接近旋转过零。',
+    label: '同一模型·临界初始旋转',
+    frictionCoefficient: TABLE_DYNAMIC_FRICTION,
+    note: '仍用 μ=0.25，只改变入射下旋到约 −1980 rpm，观察过零门槛。',
+    source: TABLE_CONTACT_MODEL_SOURCE,
   },
   'high-grip': {
     id: 'high-grip',
-    label: '高有效摩擦',
-    frictionCoefficient: 0.50,
-    note: '切向冲量足够大时，旋转可能过零并反向。',
+    label: '同一模型·过零初始旋转',
+    frictionCoefficient: TABLE_DYNAMIC_FRICTION,
+    note: '仍用 μ=0.25，只改变入射下旋到约 −1860 rpm，第二跳过零为上旋。',
+    source: TABLE_CONTACT_MODEL_SOURCE,
   },
 } as const;
 
@@ -75,26 +89,15 @@ export interface TableImpactEvent {
 
 //#region 公开 API
 export function tableRestitution(impactSpeed: number): number {
-  const calibratedRestitution = Math.max(0.55, Math.min(0.90, 0.93 - 0.02 * impactSpeed));
-  const lowSpeedRatio = Math.max(0, Math.min(1, (impactSpeed - 0.005) / (0.30 - 0.005)));
-  const lowSpeedElasticity = lowSpeedRatio * lowSpeedRatio * (3 - 2 * lowSpeedRatio);
-  return calibratedRestitution * lowSpeedElasticity;
+  // Nature's 2026 ball–table model uses the measured velocity-dependent law
+  // ε_table = 0.98 − 0.02 v_z⁻, with v_z⁻ in m/s. Do not fade the bounce to
+  // zero at low speed: that was an old demo-only heuristic.
+  return Math.max(0.05, Math.min(0.98, 0.98 - 0.02 * Math.max(0, impactSpeed)));
 }
 
 export function topSpinRpmFromAngularZ(angularZ: number): number {
   // The project convention is positive topRpm => angularVelocity.z < 0.
   return -angularZ / RPM_TO_RAD;
-}
-
-export function applyAirSpinDamping(
-  angularVelocity: { x: number; y: number; z: number },
-  dt: number,
-): void {
-  if (dt <= 0) return;
-  const decay = Math.exp(-AIR_SPIN_DECAY_RATE * dt);
-  angularVelocity.x *= decay;
-  angularVelocity.y *= decay;
-  angularVelocity.z *= decay;
 }
 
 export function classifySpin(topSpinRpm: number, neutralBandRpm = 25): SpinSense {

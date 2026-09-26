@@ -417,15 +417,15 @@
     <section class="demo-item" data-demo-item="spin-reversal">
       <div class="demo-item-head"><div class="demo-item-title">一个球可以即是上旋球又是下旋球吗？<small>下旋减弱、过零与接球方的判断</small></div><button class="demo-quick" type="button" data-demo-start="spin-reversal" aria-label="演示"><i data-lucide="play"></i>演示</button><button class="demo-expand" type="button" aria-label="折叠旋转反转专题" aria-expanded="true"></button></div>
       <div class="demo-item-body">
-        <p>同一个球先以明确的下旋出手。台面碰撞时，切向摩擦会改变角速度；空气阻力主要让旋转减弱，重力影响落台冲击。标准条件下它仍是下旋，特定有效摩擦条件下可能过零变成上旋。</p>
-        <div class="demo-tags"><span>第一跳：发球方台面</span><span>第二跳：接球方台面</span><span>RPM 过零</span><span>仿真示意</span></div>
+        <p>同一个球先以明确的下旋出手。台面碰撞时，切向摩擦会改变角速度；空气阻力主要让旋转减弱，重力影响落台冲击。三条轨迹使用同一来源模型台面，只扫描入射初始旋转：基线仍是下旋，临界接近不转，另一组在这套条件下过零。</p>
+        <div class="demo-tags"><span>第一跳：发球方台面</span><span>第二跳：接球方台面</span><span>RPM 过零</span><span>来源模型 μ=0.25</span><span>3D CFD 空气系数</span></div>
         <div class="spin-profile-buttons" aria-label="旋转条件对照">
-          <button type="button" data-spin-profile="standard" aria-pressed="false">标准 vs 低摩擦</button>
-          <button type="button" data-spin-profile="critical" aria-pressed="false">标准 vs 临界</button>
-          <button class="active" type="button" data-spin-profile="reversal" aria-pressed="true">标准 vs 反转</button>
+          <button type="button" data-spin-profile="standard" aria-pressed="false">同一模型·基线</button>
+          <button type="button" data-spin-profile="critical" aria-pressed="false">同一模型·临界初始旋转</button>
+          <button class="active" type="button" data-spin-profile="reversal" aria-pressed="true">同一模型·过零初始旋转</button>
         </div>
         <div class="demo-actions"><button id="spin-reversal-preview">预览轨迹</button><button id="spin-reversal-fire">发射并录屏</button></div>
-        <div class="demo-legend"><span><i style="background:#54d6ff"></i>标准条件</span><span><i style="background:#ff5d73"></i>对照条件</span></div>
+        <div class="demo-legend"><span><i style="background:#54d6ff"></i>基线（−3200 rpm 发射预设）</span><span><i style="background:#ff5d73"></i>对照（只改初始旋转）</span></div>
         <div id="spin-reversal-metrics" class="demo-metrics">点击“预览轨迹”查看两次落台前后的上下旋 RPM。</div>
         <div class="spin-definition">实战判断：在来球速度、接触高度和拍面角度相近时，垂直反胶拍面更容易把球带向上还是向下，可作为接球方的操作性判断；这不是替代旋转物理定义的唯一标准。</div>
       </div>

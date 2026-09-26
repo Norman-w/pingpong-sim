@@ -24,10 +24,15 @@ import {
   type TargetLane,
 } from '../src/serveMachine';
 import {
-  applyAirSpinDamping,
   resolveTableImpactKinematics,
   TABLE_IMPACT_PROFILES,
+  tableRestitution,
 } from '../src/domain/tableImpact';
+import {
+  aerodynamicCoefficients,
+  aerodynamicForces,
+  integrateAerodynamicSpin,
+} from '../src/domain/aerodynamics';
 import type { TrackingSession } from '../src/features/trackingTypes';
 
 type TestCase = { name: string; run: () => void | Promise<void> };
@@ -49,6 +54,10 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
 
 function assertArrayEqual<T>(actual: T[], expected: T[], message: string): void {
   assertEqual(JSON.stringify(actual), JSON.stringify(expected), message);
+}
+
+function assertNear(actual: number, expected: number, tolerance: number, message: string): void {
+  assert(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, got ${actual}`);
 }
 
 test('儿童放高球错过窗口 A 后切换窗口 B，并保持视线跟球后退', () => {
@@ -203,7 +212,13 @@ test('儿童放高球在全深度和三条线路只落接球台一次，下一�
 });
 
 function spinTopicResult(mode: 'standard' | 'critical' | 'reversal') {
-  const preset = getPreset('serve-back-short');
+  const preset = {
+    ...getPreset('serve-back-short'),
+    // The comparison is a controlled initial-spin sweep under the same
+    // source-backed table law. These are launch settings, not friction
+    // coefficients: the table model remains μ=0.25 for all three cases.
+    topRpm: mode === 'critical' ? -1980 : mode === 'reversal' ? -1860 : -3200,
+  };
   const solution = solveLaunch(preset, {
     strength: 1,
     cadence: preset.cadence,
@@ -240,9 +255,9 @@ test('旋转专题临界条件会经过接近不转的过零门槛', () => {
   assertEqual(result.outcome, 'near-zero', '临界条件不能直接标记成反转');
 });
 
-test('旋转专题高有效摩擦条件第二跳可以过零并改变接球趋势', () => {
+test('旋转专题过零初始旋转条件第二跳可以过零并改变接球趋势', () => {
   const result = spinTopicResult('reversal');
-  assert(result.impacts.some(impact => impact.spinReversed), '高有效摩擦条件第二跳应过零');
+  assert(result.impacts.some(impact => impact.spinReversed), '过零初始旋转条件第二跳应过零');
   assertEqual(result.finalSense, 'topspin', '反转后的最终状态应标为上旋');
   assertEqual(result.receiverTrend, 'upward', '上旋在垂直反胶拍面测试中应显示上蹿趋势');
 });
@@ -259,8 +274,26 @@ test('台面冲量只处理下落碰撞，不会吞掉向上的竖直速度', ()
 
 test('分析轨迹的空气旋转阻尼会减弱角速度但不改变旋转方向', () => {
   const angularVelocity = { x: 0, y: 0, z: 100 };
-  applyAirSpinDamping(angularVelocity, 1);
+  integrateAerodynamicSpin(angularVelocity, { x: 5, y: 0, z: 0 }, 1);
   assert(angularVelocity.z > 0 && angularVelocity.z < 100, '空气阻尼应减弱角速度且不反向');
+});
+
+test('空气动力使用来源 CFD 表并在来源域外显式夹值', () => {
+  const coefficients = aerodynamicCoefficients(5, 45 * 2 * Math.PI);
+  assertNear(coefficients.dragCoefficient, 0.577, 1e-12, '5 m/s、45 rps 的阻力系数应来自 CFD 表');
+  assertNear(coefficients.magnusCoefficient, 0.089, 1e-12, '5 m/s、45 rps 的马格努斯系数应来自 CFD 表');
+  assertNear(coefficients.fluidTorqueCoefficient, 0.0181, 1e-12, '5 m/s、45 rps 的流体转矩系数应来自 CFD 表');
+  assert(!coefficients.clampedToSourceDomain, '来源表网格内不应标记夹值');
+  const outside = aerodynamicCoefficients(1, 5 * 2 * Math.PI);
+  assert(outside.clampedToSourceDomain, '来源表网格外必须显式标记夹值');
+});
+
+test('三维空气力方向和台面恢复系数遵守物理符号', () => {
+  const aero = aerodynamicForces({ x: 5, y: 0, z: 0 }, { x: 0, y: 0, z: 45 * 2 * Math.PI });
+  assert(aero.force.x < 0, '阻力必须反向于平动速度');
+  assert(aero.force.y > 0, 'ω×v 的三维马格努斯力方向必须为正 Y');
+  assert(aero.torque.z < 0, '流体转矩必须反向于 Z 轴角速度');
+  assertNear(tableRestitution(5), 0.88, 1e-12, '台面恢复系数应使用速度相关来源公式');
 });
 
 export async function runLobTopicRegressionSuite(): Promise<void> {

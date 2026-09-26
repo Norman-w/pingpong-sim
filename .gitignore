@@ -2,3 +2,10 @@ stl/*.stl
 .DS_Store
 node_modules/
 dist/
+# Raw recordings, audio, and exported videos stay in /Users/norman/Movies.
+*.mp4
+*.mov
+*.webm
+*.m4a
+*.wav
+*.aac
