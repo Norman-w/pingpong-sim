@@ -23,6 +23,7 @@ import {
   buildSpinTrajectoryLines,
   createSpinReversalRun,
   spinMetricsHtml,
+  spinRecordingMetricsHtml,
   spinOriginFromSolution,
   spinOverlayStatus,
   type SpinReversalMode,
@@ -175,7 +176,11 @@ function renderSpinReversal(mode: SpinReversalMode): void {
   const metricsHtml = spinMetricsHtml(run);
   if (metrics) metrics.innerHTML = metricsHtml;
   const recordingMetrics = document.getElementById('spin-recording-metric-card');
-  if (recordingMetrics) recordingMetrics.innerHTML = metricsHtml;
+  if (recordingMetrics) {
+    recordingMetrics.innerHTML = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal'
+      ? spinRecordingMetricsHtml(run)
+      : metricsHtml;
+  }
   setSpinRecordingOverlay(true, run);
   document.querySelectorAll<HTMLButtonElement>('[data-spin-profile]').forEach(button => {
     button.classList.toggle('active', button.dataset.spinProfile === mode);

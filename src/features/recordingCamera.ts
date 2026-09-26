@@ -4,7 +4,12 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 //#endregion
 
 //#region 常量/配置
-const CAMERA_CYCLE_SECONDS = 8.5;
+// The recording scene needs enough time to show both table contacts. Keep the
+// camera move subordinate to the event: one gentle push-in, a short hold on
+// the net/landing area, then a gentle return to the establishing view. The
+// previous 8.5 s orbit changed direction while the same pair was still in
+// flight, which made the recording hard to follow.
+export const RECORDING_CAMERA_CYCLE_SECONDS = 20;
 interface RecordingCameraKeyframe {
   time: number;
   position: readonly [number, number, number];
@@ -13,12 +18,11 @@ interface RecordingCameraKeyframe {
 }
 
 const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
-  { time: 0, position: [4300, 1750, -762.5], target: [1370, 965, -762.5], fov: 45 },
-  { time: 1.9, position: [3500, 1480, -762.5], target: [1530, 930, -762.5], fov: 42 },
-  { time: 3.8, position: [2050, 1580, 920], target: [1430, 940, -650], fov: 43 },
-  { time: 5.8, position: [2150, 1450, -2850], target: [1430, 920, -760], fov: 44 },
-  { time: 7.2, position: [4450, 2450, 2450], target: [1370, 900, -762.5], fov: 49 },
-  { time: CAMERA_CYCLE_SECONDS, position: [4300, 1750, -762.5], target: [1370, 965, -762.5], fov: 45 },
+  { time: 0, position: [4800, 2200, 1900], target: [1370, 620, -762.5], fov: 48 },
+  { time: 5, position: [4400, 1950, 1400], target: [1420, 650, -762.5], fov: 46 },
+  { time: 11, position: [3600, 1700, 850], target: [1500, 680, -762.5], fov: 44 },
+  { time: 15, position: [3600, 1700, 850], target: [1500, 680, -762.5], fov: 44 },
+  { time: 20, position: [4800, 2200, 1900], target: [1370, 620, -762.5], fov: 48 },
 ];
 //#endregion
 
@@ -44,7 +48,8 @@ function smoothStep(value: number): number {
 /**
  * A deterministic, real Three.js camera move for external recording.
  * It cycles with the recording demo restart period so every take contains
- * an establishing shot, a push-in, an angled table view, and a wide pullback.
+ * an establishing shot, one readable push-in on the net/landing area, and a
+ * wide return. There is no orbit or direction change during the contact.
  */
 export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraApi {
   let elapsedSeconds = 0;
@@ -64,7 +69,7 @@ export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraA
   };
 
   const update = (deltaSeconds: number): void => {
-    elapsedSeconds = (elapsedSeconds + Math.max(0, deltaSeconds)) % CAMERA_CYCLE_SECONDS;
+    elapsedSeconds = (elapsedSeconds + Math.max(0, deltaSeconds)) % RECORDING_CAMERA_CYCLE_SECONDS;
     const time = elapsedSeconds;
     let from = RECORDING_CAMERA_KEYFRAMES[0];
     let to = RECORDING_CAMERA_KEYFRAMES[1];

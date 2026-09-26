@@ -1,6 +1,6 @@
 # 「一个球可以即是上旋球又是下旋球吗？」录屏与科普口径
 
-状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜；本次物理审计后，旧媒体按旧模型作废，必须按新参数重新录制。旁白和字幕交接包在仓库外，ChatCut 仍不可调用。
+状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜；本次物理审计后，旧媒体按旧模型作废，必须按新参数重新录制。旁白、字幕和母版交接包在仓库外，ChatCut 仍不可调用。
 
 录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)，当前动态运镜交付说明见 [`v17-camera-delivery.md`](video/spin-reversal/v17-camera-delivery.md)。
 
@@ -58,12 +58,15 @@
 
 ## 当前运镜与成片
 
-录屏模式使用 `src/features/recordingCamera.ts` 的确定性关键帧：开场全景，随后向球台推进，再切到斜侧/侧面视角，最后拉回对照全景。相机每 8.5 秒循环一次，与双球专题自动重启周期对齐；这是真实 Three.js 相机位置、视线和视场角的变化，不是后期对固定画面的假摇镜头。录屏模式下 OrbitControls 被停用，避免把相机写回固定端线视角。
+录屏模式使用 `src/features/recordingCamera.ts` 的确定性关键帧：开场全景，随后缓慢推进到球网和落点区域，保持短暂观察，再平滑回到全景。相机每 20 秒循环一次，与双球专题自动重启周期对齐；这是真实 Three.js 相机位置、视线和视场角的变化，不是后期对固定画面的假摇镜头。录屏模式下 OrbitControls 被停用，避免把相机写回固定端线视角。运镜只服务于看清球网、落点和两条轨迹，不做绕球炫技旋转。
 
 旧模型生成过的仓库外成片已不再作为交付物。它们的文件可以留在媒体目录作历史对照，但不能发布；必须按本页的新物理模型重新录屏、配音、字幕和验收：
 
-- 横版母版目标：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-master-v20.mp4`
-- 竖版裁切目标：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/pingpong-spin-reversal-vertical-v20.mp4`
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v24/pingpong-spin-reversal-master-v24.mp4`
+- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v24/pingpong-spin-reversal-vertical-v24.mp4`
+- 音频：`zh-CN-XiaoxiaoNeural` 大陆普通话女声，三个物理条件分段配音并合成为约 89 秒 AAC 音轨；不是港腔，也不是 ChatCut 声音。
+- 字幕：已直接压入 MP4，同时保留逐句 VTT/SRT 交接稿；画面中的字幕和旁白按标准、临界、过零三段对齐。
+- 本地局域网预览：`http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal`；标准和临界镜头分别把 `mode` 改为 `standard`、`critical`。
 
 重新录制时，彩色球面必须直接跟随 Rapier 刚体姿态旋转，不能用屏幕前的箭头环代替自转；成片必须同时检查画面、运动轨迹、旁白、字幕、分辨率和 AAC 音轨。原始录屏和导出文件均不进入 Git。
 

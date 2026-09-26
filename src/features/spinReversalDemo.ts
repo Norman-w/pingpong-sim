@@ -128,6 +128,23 @@ export function spinMetricsHtml(run: SpinReversalRun): string {
     `<span class="spin-caveat">结论只对当前这组 3D 仿真条件成立。</span>`;
 }
 
+/** Keep the recording card readable at a glance; detailed source ranges stay
+ * in the normal simulation panel and the physics audit document. */
+export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
+  const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
+  const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
+  const comparisonLabel = run.comparisonProfile.label.replace(/^.*·/, '');
+  const outcome = run.comparison.outcome === 'reversed'
+    ? '第二跳后过零，变成上旋'
+    : run.comparison.outcome === 'near-zero'
+      ? '第二跳后接近不转'
+      : '第二跳后仍是下旋';
+  return `<div class="recording-result-line"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
+    `<div class="recording-result-line"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
+    `<div class="recording-rpm">仿真计算值：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</div>` +
+    `<div class="recording-note">彩色球面跟随真实三维刚体自转；轨迹线是球心路径。</div>`;
+}
+
 export function spinOverlayStatus(run: SpinReversalRun): string {
   const comparisonOutcome = run.comparison.outcome === 'reversed'
     ? '第二跳过零，变成上旋'

@@ -11,7 +11,11 @@ import { initMachineUi, type MachineUiApi } from './features/machineUi';
 import { initTrackingReplay, type TrackingReplayApi } from './features/trackingReplay';
 import { initTrackingDemo, type TrackingDemoApi } from './features/trackingDemo';
 import { initTopicDemo, type TopicDemoApi, type DemoId } from './features/topicDemo';
-import { initRecordingCamera, type RecordingCameraApi } from './features/recordingCamera';
+import {
+  initRecordingCamera,
+  RECORDING_CAMERA_CYCLE_SECONDS,
+  type RecordingCameraApi,
+} from './features/recordingCamera';
 
 //#endregion
 
@@ -169,6 +173,7 @@ const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-rever
   ? initRecordingCamera({ camera, controls })
   : null;
 let recordingDemoRestartTimer: number | null = null;
+const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
 
 function startRecordingSpinCycle(): void {
   recordingCamera?.reset();
@@ -333,7 +338,7 @@ initPhysics().then(() => {
     // does not end on an empty table after the first pair leaves the venue.
     recordingDemoRestartTimer = window.setInterval(() => {
       if (!document.hidden) startRecordingSpinCycle();
-    }, 8500);
+    }, recordingDemoRestartSeconds * 1000);
   }
   animate();
 });

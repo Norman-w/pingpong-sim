@@ -102,6 +102,35 @@ export function initBallVisuals(deps: {
     vertexColors: true,
     toneMapped: false,
   });
+
+  // The recording pair needs to be identifiable at a glance. Keep the same
+  // octant geometry and real rigid-body quaternion, but give each ball its own
+  // hue family so the blue/red labels match the objects on screen.
+  const recordingGeometryCache = new Map<number, THREE.BufferGeometry>();
+  function recordingGeometryForColor(baseHex: number): THREE.BufferGeometry {
+    const cached = recordingGeometryCache.get(baseHex);
+    if (cached) return cached;
+    const geometry = bGeo.clone();
+    const baseColor = new THREE.Color(baseHex);
+    const hsl = { h: 0, s: 0, l: 0 };
+    baseColor.getHSL(hsl);
+    const colors = new Float32Array(ballPosition.count * 3);
+    const faceColor = new THREE.Color();
+    const lightness = [0.88, 0.68, 0.48, 0.76];
+    for (let offset = 0; offset < ballPosition.count; offset += 3) {
+      const level = ((ballOctants[offset / 3] ^ (ballOctants[offset / 3] >> 1)) & 3);
+      faceColor.setHSL(hsl.h, Math.max(0.55, hsl.s), lightness[level]);
+      for (let vertex = 0; vertex < 3; vertex += 1) {
+        const index = (offset + vertex) * 3;
+        colors[index] = faceColor.r;
+        colors[index + 1] = faceColor.g;
+        colors[index + 2] = faceColor.b;
+      }
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    recordingGeometryCache.set(baseHex, geometry);
+    return geometry;
+  }
   function setBallStyle(style: BallStyle): void {
     const palette = BALL_STYLE_PALETTES[style] ?? BALL_STYLE_PALETTES.rainbow;
     const color = new THREE.Color();
@@ -133,7 +162,10 @@ export function initBallVisuals(deps: {
     // rotate around the actual world-space angular-velocity axis. A flat
     // camera-facing arrow would hide the difference between topspin, sidespin
     // and corkspin, so no render-only marker is added here.
-    const mesh = new THREE.Mesh(bGeo, ballMaterial);
+    const geometry = recordingSpinDemo && color !== undefined
+      ? recordingGeometryForColor(color)
+      : bGeo;
+    const mesh = new THREE.Mesh(geometry, ballMaterial);
     if (recordingSpinDemo) {
       mesh.scale.setScalar(RECORDING_BALL_SCALE);
       mesh.renderOrder = 5;
