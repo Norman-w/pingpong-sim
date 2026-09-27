@@ -441,6 +441,13 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
     );
     if (!ball) continue;
     ball.body.setAngvel(solution.angularVelocity, true);
+    if (recordingSpinDemo) {
+      // The recording shot is about the first two table contacts. Let the
+      // rigid body complete the short post-bounce rise, then retire it so a
+      // later cycle never teleports an old ball back to the launch point.
+      ball.recordingMaxImpacts = 2;
+      ball.recordingStopAt = undefined;
+    }
     if (index === 1) trackedBall = ball;
   }
   // The external recording uses the live physical balls and the two planned

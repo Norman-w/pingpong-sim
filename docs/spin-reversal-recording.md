@@ -1,6 +1,6 @@
 # 「一个球可以即是上旋球又是下旋球吗？」录屏与科普口径
 
-状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜；本次物理审计后，旧媒体按旧模型作废，必须按新参数重新录制。旁白、字幕和母版交接包在仓库外，ChatCut 仍不可调用。
+状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜；本次物理审计后，旧媒体按旧模型作废，已按修复后的显示和录屏生命周期重新录制 v26。旁白、字幕和母版交接包在仓库外，ChatCut 仍不可调用。
 
 录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)，当前动态运镜交付说明见 [`v17-camera-delivery.md`](video/spin-reversal/v17-camera-delivery.md)。
 
@@ -58,15 +58,17 @@
 
 ## 当前运镜与成片
 
-录屏模式使用 `src/features/recordingCamera.ts` 的确定性关键帧：开场全景，随后缓慢推进到球网和落点区域，保持短暂观察，再平滑回到全景。相机每 20 秒循环一次，与双球专题自动重启周期对齐；这是真实 Three.js 相机位置、视线和视场角的变化，不是后期对固定画面的假摇镜头。录屏模式下 OrbitControls 被停用，避免把相机写回固定端线视角。运镜只服务于看清球网、落点和两条轨迹，不做绕球炫技旋转。
+录屏模式使用 `src/features/recordingCamera.ts` 的确定性关键帧：开场全景，随后缓慢推进到球网和落点区域，保持短暂观察，再平滑回到全景。相机每 12 秒循环一次；两球在第二次落台后只保留约 0.22 秒的上升段，随后从场景退场，等空场后才开始下一轮，避免仍在弹跳的球被瞬移回出手点。这是真实 Three.js 相机位置、视线和视场角的变化，不是后期对固定画面的假摇镜头。录屏模式下 OrbitControls 被停用，避免把相机写回固定端线视角。运镜只服务于看清球网、落点和两条轨迹，不做绕球炫技旋转。
+
+本轮还修复了显示层的穿模源头：录屏球的渲染半径现在与 Rapier 的 20 mm 物理碰撞半径一致，不再使用会穿过台面和球网的 3.2 倍展示外壳；球面继续直接跟随刚体四元数，用四分之一球面配色让真实自转可读。连续浏览器验收中，球心始终保持在台面上方至少一个球半径，且没有出现跨帧的大幅瞬移。
 
 旧模型生成过的仓库外成片已不再作为交付物。它们的文件可以留在媒体目录作历史对照，但不能发布；必须按本页的新物理模型重新录屏、配音、字幕和验收：
 
-- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v25/pingpong-spin-reversal-master-v25.mp4`
-- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v25/pingpong-spin-reversal-vertical-v25.mp4`
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v26/pingpong-spin-reversal-master-v26.mp4`
+- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v26/pingpong-spin-reversal-vertical-v26.mp4`
 - 音频：试听 2 的 `zh-CN-XiaoyiNeural` 大陆普通话女声，三个物理条件分段配音并合成为约 89 秒 AAC 音轨；不是港腔，也不是 ChatCut 声音。
 - 字幕：已直接压入 MP4，同时保留逐句 VTT/SRT 交接稿；画面中的字幕和旁白按标准、临界、过零三段对齐。
-- 本地局域网预览：`http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal`；标准和临界镜头分别把 `mode` 改为 `standard`、`critical`。
+- 本地局域网预览：`http://192.168.7.187:5173/pingpong-sim/?recording=spin-reversal&mode=reversal`；标准和临界镜头分别把 `mode` 改为 `standard`、`critical`。当前 Vite 进程监听 5173，端口变更时以实际进程为准。
 
 重新录制时，彩色球面必须直接跟随 Rapier 刚体姿态旋转，不能用屏幕前的箭头环代替自转；成片必须同时检查画面、运动轨迹、旁白、字幕、分辨率和 AAC 音轨。原始录屏和导出文件均不进入 Git。
 

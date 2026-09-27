@@ -4,7 +4,7 @@ import { createSceneBootstrap } from './scene/sceneBootstrap';
 import { initBallVisuals } from './scene/ballVisuals';
 import { loadSceneStls } from './scene/stlLoader';
 import { initWindowManager } from './ui/windowManager';
-import { init as initPhysics, getBalls, removeBall, step as physicsStep, syncMeshes, getBallCount } from './physics';
+import { init as initPhysics, getBalls, removeBall, step as physicsStep, syncMeshes, getBallCount, type RapierBall } from './physics';
 import { SHOT_PRESETS } from './serveMachine';
 import { initReceiveStance } from './features/receiveStance';
 import { initMachineUi, type MachineUiApi } from './features/machineUi';
@@ -174,10 +174,28 @@ const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-rever
   : null;
 let recordingDemoRestartTimer: number | null = null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
+const recordingPostSecondBounceSeconds = 0.22;
 
 function startRecordingSpinCycle(): void {
   recordingCamera?.reset();
   void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+}
+
+function retireCompletedRecordingBalls(): void {
+  if (recordingMode !== 'spin-reversal') return;
+  const retire: RapierBall[] = [];
+  for (const ball of [...getBalls()]) {
+    if (ball.recordingMaxImpacts === undefined) continue;
+    if (ball.tableImpacts >= ball.recordingMaxImpacts && ball.recordingStopAt === undefined) {
+      ball.recordingStopAt = ball.t + recordingPostSecondBounceSeconds;
+    }
+    if (ball.recordingStopAt !== undefined && ball.t >= ball.recordingStopAt) retire.push(ball);
+  }
+  for (const ball of retire) {
+    scene.remove(ball.mesh);
+    machineBallMeta.delete(ball.body);
+    removeBall(ball);
+  }
 }
 
 setResetMachineOnClear(() => {
@@ -248,6 +266,7 @@ function animate(): void {
   // follows the same trajectory; only camera phase timing/interpolation uses
   // trackingSpeed.
   physicsStep((elapsedMs / 1000) * recordingPhysicsTimeScale);
+  retireCompletedRecordingBalls();
   syncMeshes();
   trackingDemoApi.updateTrackingDemo(now, elapsedMs / 1000);
   trackingReplayApi.updateReplay(elapsedMs / 1000);
@@ -333,9 +352,9 @@ initPhysics().then(() => {
     requestAnimationFrame(() => {
       startRecordingSpinCycle();
     });
-    // Give an external recorder a continuous live shot. Each restart clears
-    // the old pair and launches the same comparison again, so a long take
-    // does not end on an empty table after the first pair leaves the venue.
+    // Restart only after the two balls have completed their two-contact shot
+    // and have been retired. The short empty stage prevents a visible
+    // teleport from a late bounce back to the launch point.
     recordingDemoRestartTimer = window.setInterval(() => {
       if (!document.hidden) startRecordingSpinCycle();
     }, recordingDemoRestartSeconds * 1000);

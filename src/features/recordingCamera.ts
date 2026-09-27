@@ -9,7 +9,7 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 // the net/landing area, then a gentle return to the establishing view. The
 // previous 8.5 s orbit changed direction while the same pair was still in
 // flight, which made the recording hard to follow.
-export const RECORDING_CAMERA_CYCLE_SECONDS = 20;
+export const RECORDING_CAMERA_CYCLE_SECONDS = 12;
 interface RecordingCameraKeyframe {
   time: number;
   position: readonly [number, number, number];
@@ -18,11 +18,13 @@ interface RecordingCameraKeyframe {
 }
 
 const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
-  { time: 0, position: [4800, 2200, 1900], target: [1370, 620, -762.5], fov: 48 },
-  { time: 5, position: [4400, 1950, 1400], target: [1420, 650, -762.5], fov: 46 },
-  { time: 11, position: [3600, 1700, 850], target: [1500, 680, -762.5], fov: 44 },
-  { time: 15, position: [3600, 1700, 850], target: [1500, 680, -762.5], fov: 44 },
-  { time: 20, position: [4800, 2200, 1900], target: [1370, 620, -762.5], fov: 48 },
+  // Keep the full table and net in frame while using a moderately tighter
+  // shot so a real 40 mm ball remains identifiable without enlarging it.
+  { time: 0, position: [4300, 2000, 1650], target: [1370, 620, -762.5], fov: 45 },
+  { time: 3, position: [3950, 1800, 1250], target: [1420, 650, -762.5], fov: 43 },
+  { time: 6.5, position: [3350, 1600, 760], target: [1500, 680, -762.5], fov: 41 },
+  { time: 8.5, position: [3350, 1600, 760], target: [1500, 680, -762.5], fov: 41 },
+  { time: 12, position: [4300, 2000, 1650], target: [1370, 620, -762.5], fov: 45 },
 ];
 //#endregion
 

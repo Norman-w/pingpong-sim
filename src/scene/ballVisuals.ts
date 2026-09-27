@@ -20,10 +20,6 @@ const BALL_OCTANT_COLORS = [
 const BALL_WHITE = 0xf8fafc;
 const BALL_YELLOW = 0xffdf32;
 const BALL_RADIUS = 20;
-// The recording stage keeps the physical collider at 20 mm, but enlarges the
-// render-only mesh so the two moving comparison balls remain legible in a
-// 1920×1080 capture. This does not change any physics or measured trajectory.
-const RECORDING_BALL_SCALE = 3.2;
 const STANDARD_DROP_HEIGHT = 300;
 const SPX = 2055;
 const SPZ = -762;
@@ -112,14 +108,19 @@ export function initBallVisuals(deps: {
     if (cached) return cached;
     const geometry = bGeo.clone();
     const baseColor = new THREE.Color(baseHex);
-    const hsl = { h: 0, s: 0, l: 0 };
-    baseColor.getHSL(hsl);
     const colors = new Float32Array(ballPosition.count * 3);
     const faceColor = new THREE.Color();
-    const lightness = [0.88, 0.68, 0.48, 0.76];
+    const white = new THREE.Color(0xf7fbff);
+    const shadow = baseColor.clone().multiplyScalar(0.58);
     for (let offset = 0; offset < ballPosition.count; offset += 3) {
       const level = ((ballOctants[offset / 3] ^ (ballOctants[offset / 3] >> 1)) & 3);
-      faceColor.setHSL(hsl.h, Math.max(0.55, hsl.s), lightness[level]);
+      // A high-contrast, three-dimensional colour split makes the actual
+      // quaternion rotation readable at the ball's real 40 mm diameter. The
+      // colour stays on the surface; it does not add a billboard, arrow, or
+      // oversized shell that could intersect the table or net.
+      if (level === 1 || level === 3) faceColor.copy(white);
+      else if (level === 2) faceColor.copy(shadow);
+      else faceColor.copy(baseColor);
       for (let vertex = 0; vertex < 3; vertex += 1) {
         const index = (offset + vertex) * 3;
         colors[index] = faceColor.r;
@@ -167,7 +168,11 @@ export function initBallVisuals(deps: {
       : bGeo;
     const mesh = new THREE.Mesh(geometry, ballMaterial);
     if (recordingSpinDemo) {
-      mesh.scale.setScalar(RECORDING_BALL_SCALE);
+      // Keep the visible 40 mm sphere exactly coincident with Rapier's 20 mm
+      // radius collider. A previous recording-only enlargement left the
+      // collider at the real size while the rendered shell was 3.2× larger,
+      // which made the ball visibly enter the table/net before the rigid body
+      // contacted it and looked like a jump or a tunnel through the model.
       mesh.renderOrder = 5;
     }
     mesh.castShadow = mesh.receiveShadow = true;

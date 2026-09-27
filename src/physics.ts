@@ -49,6 +49,9 @@ export interface RapierBall {
   lastTableImpact: { x: number; z: number } | null;
   tableImpactProfile: TableImpactProfile;
   tableImpactHistory: TableImpactEvent[];
+  /** Recording-only lifecycle controls; normal demos leave these undefined. */
+  recordingMaxImpacts?: number;
+  recordingStopAt?: number;
 }
 
 const balls: RapierBall[] = [];
