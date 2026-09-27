@@ -35,4 +35,4 @@
 
 ## 录制命名
 
-本轮 v26 原始录屏统一使用 `standard-clean.mov`、`critical-clean.mov`、`reversal-clean.mov`，每个 36 秒；合成时每段取录屏第 2–32 秒，三段分别对应 0–30、30–60、60 秒以后，避免把录屏启动空白带入条件切换。原始录屏只放在仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/raw/`，不要将 `.mov`、`.mp4`、`.wav` 或剪辑工程提交到 Git。
+本轮 v26 原始录屏统一使用 `standard-clean.mov`、`critical-clean.mov`、`reversal-clean.mov`，每个 36 秒；合成时标准段取录屏第 6–36 秒，临界和过零段各取第 2–32 秒，三段分别对应 0–30、30–60、60 秒以后，确保片头和条件切换时画面已经有球在运动。原始录屏只放在仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/raw/`，不要将 `.mov`、`.mp4`、`.wav` 或剪辑工程提交到 Git。
