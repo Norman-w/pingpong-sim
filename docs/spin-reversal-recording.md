@@ -62,9 +62,9 @@
 
 旧模型生成过的仓库外成片已不再作为交付物。它们的文件可以留在媒体目录作历史对照，但不能发布；必须按本页的新物理模型重新录屏、配音、字幕和验收：
 
-- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v24/pingpong-spin-reversal-master-v24.mp4`
-- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v24/pingpong-spin-reversal-vertical-v24.mp4`
-- 音频：`zh-CN-XiaoxiaoNeural` 大陆普通话女声，三个物理条件分段配音并合成为约 89 秒 AAC 音轨；不是港腔，也不是 ChatCut 声音。
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v25/pingpong-spin-reversal-master-v25.mp4`
+- 竖版裁切：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/v25/pingpong-spin-reversal-vertical-v25.mp4`
+- 音频：试听 2 的 `zh-CN-XiaoyiNeural` 大陆普通话女声，三个物理条件分段配音并合成为约 89 秒 AAC 音轨；不是港腔，也不是 ChatCut 声音。
 - 字幕：已直接压入 MP4，同时保留逐句 VTT/SRT 交接稿；画面中的字幕和旁白按标准、临界、过零三段对齐。
 - 本地局域网预览：`http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal`；标准和临界镜头分别把 `mode` 改为 `standard`、`critical`。
 
