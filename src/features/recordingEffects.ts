@@ -65,7 +65,7 @@ export function initRecordingEffects(deps: {
     cues.push({ mesh, age: 0 });
 
     if (eventEl) {
-      eventEl.textContent = `第 ${bounceIndex} 跳 · 切向摩擦改变角速度`;
+      eventEl.textContent = `第 ${bounceIndex} 跳 · 球擦台后转速继续变化`;
       eventEl.classList.remove('visible', 'pulse');
       // Force the short pulse animation to restart for nearly simultaneous
       // blue/red contacts without introducing a timing dependency in physics.

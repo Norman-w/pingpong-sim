@@ -82,6 +82,12 @@ function spinImpactSummary(result: SpinReversalResult): string {
     `第${impact.bounceIndex}跳 ${spinRpmLabel(impact.beforeTopSpinRpm)}→${spinRpmLabel(impact.afterTopSpinRpm)}`,
   ).join('；');
 }
+
+function comparisonDisplayLabel(profile: TableImpactProfile): string {
+  if (profile.id === 'critical') return '下旋调小';
+  if (profile.id === 'high-grip') return '过零这一档';
+  return '常规下旋';
+}
 //#endregion
 
 //#region 公开 API
@@ -119,13 +125,13 @@ export function spinOriginFromSolution(solution: LaunchSolution, zOffsetMm: numb
 export function spinMetricsHtml(run: SpinReversalRun): string {
   const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
-  return `<strong>蓝色球（来源模型·基线）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
-    `<strong>红色球（${run.comparisonProfile.label}）</strong>：第二跳后${spinSenseLabel(run.comparison.finalSense)}<br>` +
+  return `<strong>蓝色球（常规下旋）</strong>：两次落台后仍是${spinSenseLabel(run.standard.finalSense)}<br>` +
+    `<strong>红色球（${comparisonDisplayLabel(run.comparisonProfile)}）</strong>：第二跳后${spinSenseLabel(run.comparison.finalSense)}<br>` +
     `<span class="spin-rpm-note">仿真读数：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</span><br>` +
-    `<span class="spin-caveat">两条轨迹使用同一来源接触模型（μ=0.25），红球只改变入射初始下旋。</span><br>` +
-    `<span class="spin-caveat">空气系数：CFD 表 2.5–20 m/s、15–90 rps；表外状态按来源边界夹值。</span><br>` +
-    `<span class="spin-caveat">球面彩色分区随真实刚体姿态旋转，表示实际自转方向。</span><br>` +
-    `<span class="spin-caveat">结论只对当前这组 3D 仿真条件成立。</span>`;
+    `<span class="spin-caveat">蓝红只差出手时的下旋大小，球台条件不换。</span><br>` +
+    `<span class="spin-caveat">球速、落台角度和起手转速，都会影响最后的结果。</span><br>` +
+    `<span class="spin-caveat">球面彩色分区跟着球一起转，方便看清自转方向。</span><br>` +
+    `<span class="spin-caveat">这只是当前这组条件下的仿真结果。</span>`;
 }
 
 /** Keep the recording card readable at a glance; detailed source ranges stay
@@ -133,7 +139,7 @@ export function spinMetricsHtml(run: SpinReversalRun): string {
 export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
   const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
-  const comparisonLabel = run.comparisonProfile.label.replace(/^.*·/, '');
+  const comparisonLabel = comparisonDisplayLabel(run.comparisonProfile);
   const outcome = run.comparison.outcome === 'reversed'
     ? '第二跳后过零，变成上旋'
     : run.comparison.outcome === 'near-zero'
@@ -142,7 +148,7 @@ export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
   return `<div class="recording-result-line"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
     `<div class="recording-result-line"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
     `<div class="recording-rpm">仿真计算值：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</div>` +
-    `<div class="recording-note">同一三维台面模型；红球只改变入射初始旋转。</div>`;
+    `<div class="recording-note">球台一样，红球只调了出手时的下旋。</div>`;
 }
 
 export function spinOverlayStatus(run: SpinReversalRun): string {

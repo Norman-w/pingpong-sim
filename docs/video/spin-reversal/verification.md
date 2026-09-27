@@ -1,6 +1,6 @@
 # 旋转反转专题验收记录
 
-> 这是旧模型的代码与浏览器历史记录，不能作为当前成片验收。当前 v27 横版、竖版和音轨的规格与抽帧结果见 [`v27-media-manifest.md`](v27-media-manifest.md)；当前物理审计和科学口径以父级 [`docs/spin-reversal-recording.md`](../../spin-reversal-recording.md) 为准。
+> 这是代码与浏览器历史记录。当前 v29 横版、竖版和音轨的规格与抽帧结果见 [`v29-media-manifest.md`](v29-media-manifest.md)；当前物理审计和科学口径以父级 [`docs/spin-reversal-recording.md`](../../spin-reversal-recording.md) 为准。
 
 ## 代码与运行环境
 
@@ -37,6 +37,6 @@ Chrome 中已确认：
 
 ## 尚未完成
 
-- 没有 ChatCut 工具或页面可执行轻剪、AI 配音、字幕同步或 MP4 导出。
-- 旧模型横版/竖版 MP4 不再作为交付；必须按当前来源模型重新导出并检查，发布仍未执行。
+- 没有 ChatCut 工具或页面可执行轻剪；v29 使用本机 Edge TTS 生成配音、烧录字幕并完成 MP4 导出。
+- v29 横版/竖版 MP4 已按当前录屏素材重新导出并检查，发布仍未执行。
 - 发布仍由用户手动完成；原始大体积媒体不进入 Git。
