@@ -52,9 +52,27 @@ export interface RapierBall {
   /** Recording-only lifecycle controls; normal demos leave these undefined. */
   recordingMaxImpacts?: number;
   recordingStopAt?: number;
+  /** Recording-only colour used for contact cues; physics never reads it. */
+  recordingColor?: number;
 }
 
 const balls: RapierBall[] = [];
+
+interface RenderState {
+  previousPosition: THREE.Vector3;
+  previousQuaternion: THREE.Quaternion;
+  snapToCurrent: boolean;
+}
+
+// Rapier advances on a fixed 240 Hz clock while the browser paints at an
+// unrelated cadence. Keeping the last completed transform lets the renderer
+// interpolate instead of holding a frame and then jumping several fixed steps
+// when the recording runs at 30/60 Hz.
+const renderStates = new Map<RapierBall, RenderState>();
+const currentPositionScratch = new THREE.Vector3();
+const interpolatedPositionScratch = new THREE.Vector3();
+const currentQuaternionScratch = new THREE.Quaternion();
+const interpolatedQuaternionScratch = new THREE.Quaternion();
 
 const mm = (value: number): number => value / MM_PER_M;
 
@@ -295,18 +313,27 @@ export function createBall(
     tableImpactHistory: [],
   };
   balls.push(ball);
+  const initialPosition = body.translation();
+  const initialRotation = body.rotation();
+  renderStates.set(ball, {
+    previousPosition: new THREE.Vector3(initialPosition.x, initialPosition.y, initialPosition.z),
+    previousQuaternion: new THREE.Quaternion(initialRotation.x, initialRotation.y, initialRotation.z, initialRotation.w),
+    snapToCurrent: false,
+  });
   return ball;
 }
 
 export function removeBall(ball: RapierBall): void {
   const index = balls.indexOf(ball);
   if (index >= 0) balls.splice(index, 1);
+  renderStates.delete(ball);
   world.removeRigidBody(ball.body);
 }
 
 export function clearAllBalls(): void {
   for (const ball of balls) world.removeRigidBody(ball.body);
   balls.length = 0;
+  renderStates.clear();
 }
 
 export function getBalls(): readonly RapierBall[] { return balls; }
@@ -324,23 +351,52 @@ export function step(elapsedSeconds: number): void {
   accumulator += Math.min(Math.max(elapsedSeconds, 0), MAX_FRAME_TIME);
 
   while (accumulator >= FIXED_DT) {
+    for (const ball of balls) {
+      const render = renderStates.get(ball);
+      if (!render) continue;
+      const p = ball.body.translation();
+      const r = ball.body.rotation();
+      render.previousPosition.set(p.x, p.y, p.z);
+      render.previousQuaternion.set(r.x, r.y, r.z, r.w);
+    }
     applyAerodynamics();
     for (const ball of balls) {
+      const impactCountBefore = ball.tableImpacts;
       resolveTableImpact(ball);
+      const render = renderStates.get(ball);
+      if (render && ball.tableImpacts !== impactCountBefore) render.snapToCurrent = true;
       applyTableRollingResistance(ball);
     }
     world.step();
-    for (const ball of balls) ball.t += FIXED_DT;
+    for (const ball of balls) {
+      ball.t += FIXED_DT;
+    }
     accumulator -= FIXED_DT;
   }
 }
 
 export function syncMeshes(): void {
   if (!readyFlag) return;
+  const alpha = THREE.MathUtils.clamp(accumulator / FIXED_DT, 0, 1);
   for (const ball of balls) {
     const p = ball.body.translation();
     const r = ball.body.rotation();
-    ball.mesh.position.set(p.x * MM_PER_M, p.y * MM_PER_M, p.z * MM_PER_M);
-    ball.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+    const render = renderStates.get(ball);
+    if (!render || render.snapToCurrent) {
+      ball.mesh.position.set(p.x * MM_PER_M, p.y * MM_PER_M, p.z * MM_PER_M);
+      ball.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+      if (render) render.snapToCurrent = false;
+      continue;
+    }
+    currentPositionScratch.set(p.x, p.y, p.z);
+    currentQuaternionScratch.set(r.x, r.y, r.z, r.w);
+    interpolatedPositionScratch.lerpVectors(render.previousPosition, currentPositionScratch, alpha);
+    interpolatedQuaternionScratch.copy(render.previousQuaternion).slerp(currentQuaternionScratch, alpha);
+    ball.mesh.position.set(
+      interpolatedPositionScratch.x * MM_PER_M,
+      interpolatedPositionScratch.y * MM_PER_M,
+      interpolatedPositionScratch.z * MM_PER_M,
+    );
+    ball.mesh.quaternion.copy(interpolatedQuaternionScratch);
   }
 }

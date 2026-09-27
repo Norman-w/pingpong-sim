@@ -413,7 +413,13 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
   // Keep the actual STL table and both physical balls visible in Chromium.
   // The top-down god view hides the single-sided imported table surface; the
   // referee view remains a real 3D shot and changes no physics.
-  if (recordingSpinDemo) deps.receiveStance.applyQuickView('endline');
+  if (recordingSpinDemo) {
+    deps.receiveStance.applyQuickView('endline');
+    // The contact-guide marker belongs to interactive receive training. It is
+    // an unrelated glowing object in a clean recording take, so hide all guide
+    // geometry while leaving the measured table-impact cues enabled.
+    deps.receiveStance.updateContactGuide(false);
+  }
   deps.machineUiApi.setMachineVisible(false);
   demoActive = true;
   setActiveDemoItem('spin-reversal');
@@ -447,6 +453,7 @@ async function startSpinReversalDemo(mode = spinReversalMode): Promise<void> {
       // later cycle never teleports an old ball back to the launch point.
       ball.recordingMaxImpacts = 2;
       ball.recordingStopAt = undefined;
+      ball.recordingColor = launch.color;
     }
     if (index === 1) trackedBall = ball;
   }

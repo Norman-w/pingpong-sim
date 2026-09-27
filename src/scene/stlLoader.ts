@@ -18,7 +18,7 @@ const loader = new STLLoader();
 //#endregion
 
 //#region 公开 API
-export function loadSceneStls(scene: THREE.Scene): void {
+export function loadSceneStls(scene: THREE.Scene): Promise<void> {
   const msg = document.createElement('div');
   msg.id = 'load-msg';
   msg.style.cssText =
@@ -26,7 +26,7 @@ export function loadSceneStls(scene: THREE.Scene): void {
   msg.textContent = '加载模型中...';
   document.body.appendChild(msg);
 
-  void (async () => {
+  return (async () => {
     try {
       await loadSTL(scene, 'table-surface.stl', 0x0b0d12, 0.02, 0.48, 1);
       await loadSTL(scene, 'table-frame.stl', 0x555555, 0.3, 0.4, 1);
@@ -37,6 +37,7 @@ export function loadSceneStls(scene: THREE.Scene): void {
       const message = e instanceof Error ? e.message : String(e);
       msg.textContent = '加载失败: ' + message;
       console.error(e);
+      throw e;
     }
   })();
 }

@@ -4,12 +4,11 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 //#endregion
 
 //#region 常量/配置
-// The recording scene needs enough time to show both table contacts. Keep the
-// camera move subordinate to the event: one gentle push-in, a short hold on
-// the net/landing area, then a gentle return to the establishing view. The
-// previous 8.5 s orbit changed direction while the same pair was still in
-// flight, which made the recording hard to follow.
+// One deliberate move: establish the whole table, make a constant-speed push
+// toward the contact area, then hold. The camera never orbits or reverses while
+// the balls are in flight.
 export const RECORDING_CAMERA_CYCLE_SECONDS = 12;
+export type RecordingCameraPhase = 'establish' | 'approach' | 'contact' | 'hold';
 interface RecordingCameraKeyframe {
   time: number;
   position: readonly [number, number, number];
@@ -18,13 +17,12 @@ interface RecordingCameraKeyframe {
 }
 
 const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
-  // Keep the full table and net in frame while using a moderately tighter
-  // shot so a real 40 mm ball remains identifiable without enlarging it.
-  { time: 0, position: [4300, 2000, 1650], target: [1370, 620, -762.5], fov: 45 },
-  { time: 3, position: [3950, 1800, 1250], target: [1420, 650, -762.5], fov: 43 },
-  { time: 6.5, position: [3350, 1600, 760], target: [1500, 680, -762.5], fov: 41 },
-  { time: 8.5, position: [3350, 1600, 760], target: [1500, 680, -762.5], fov: 41 },
-  { time: 12, position: [4300, 2000, 1650], target: [1370, 620, -762.5], fov: 45 },
+  { time: 0, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
+  { time: 1.4, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
+  // The camera push has constant speed and a fixed FOV. This avoids an
+  // unexplained zoom or an orbit that competes with the bounce event.
+  { time: 4.6, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
+  { time: 12, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
 ];
 //#endregion
 
@@ -32,6 +30,7 @@ const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
 export interface RecordingCameraApi {
   reset: () => void;
   update: (deltaSeconds: number) => void;
+  phase: () => RecordingCameraPhase;
 }
 
 interface RecordingCameraDeps {
@@ -41,8 +40,16 @@ interface RecordingCameraDeps {
 //#endregion
 
 //#region 私有成员
-function smoothStep(value: number): number {
-  return value * value * (3 - 2 * value);
+const fromPositionScratch = new THREE.Vector3();
+const toPositionScratch = new THREE.Vector3();
+const fromTargetScratch = new THREE.Vector3();
+const toTargetScratch = new THREE.Vector3();
+
+function phaseForTime(time: number): RecordingCameraPhase {
+  if (time < 1.4) return 'establish';
+  if (time < 4.6) return 'approach';
+  if (time < 8.5) return 'contact';
+  return 'hold';
 }
 //#endregion
 
@@ -51,10 +58,11 @@ function smoothStep(value: number): number {
  * A deterministic, real Three.js camera move for external recording.
  * It cycles with the recording demo restart period so every take contains
  * an establishing shot, one readable push-in on the net/landing area, and a
- * wide return. There is no orbit or direction change during the contact.
+ * steady hold. There is no orbit, zoom, or direction change during contact.
  */
 export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraApi {
   let elapsedSeconds = 0;
+  let appliedFov = Number.NaN;
 
   const applyPose = (position: readonly number[], target: readonly number[], fov: number): void => {
     deps.camera.position.set(position[0], position[1], position[2]);
@@ -62,6 +70,7 @@ export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraA
     deps.camera.lookAt(deps.controls.target);
     deps.camera.fov = fov;
     deps.camera.updateProjectionMatrix();
+    appliedFov = fov;
   };
 
   const reset = (): void => {
@@ -83,24 +92,24 @@ export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraA
       }
     }
     const span = Math.max(0.001, to.time - from.time);
-    const progress = smoothStep(THREE.MathUtils.clamp((time - from.time) / span, 0, 1));
-    deps.camera.position.lerpVectors(
-      new THREE.Vector3(...from.position),
-      new THREE.Vector3(...to.position),
-      progress,
-    );
-    deps.controls.target.lerpVectors(
-      new THREE.Vector3(...from.target),
-      new THREE.Vector3(...to.target),
-      progress,
-    );
+    const progress = THREE.MathUtils.clamp((time - from.time) / span, 0, 1);
+    fromPositionScratch.fromArray(from.position);
+    toPositionScratch.fromArray(to.position);
+    fromTargetScratch.fromArray(from.target);
+    toTargetScratch.fromArray(to.target);
+    deps.camera.position.lerpVectors(fromPositionScratch, toPositionScratch, progress);
+    deps.controls.target.lerpVectors(fromTargetScratch, toTargetScratch, progress);
     deps.camera.lookAt(deps.controls.target);
-    deps.camera.fov = THREE.MathUtils.lerp(from.fov, to.fov, progress);
-    deps.camera.updateProjectionMatrix();
+    const fov = THREE.MathUtils.lerp(from.fov, to.fov, progress);
+    if (fov !== appliedFov) {
+      deps.camera.fov = fov;
+      deps.camera.updateProjectionMatrix();
+      appliedFov = fov;
+    }
   };
 
   deps.controls.enabled = false;
   reset();
-  return { reset, update };
+  return { reset, update, phase: () => phaseForTime(elapsedSeconds) };
 }
 //#endregion

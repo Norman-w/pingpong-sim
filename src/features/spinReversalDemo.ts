@@ -142,7 +142,7 @@ export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
   return `<div class="recording-result-line"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
     `<div class="recording-result-line"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
     `<div class="recording-rpm">仿真计算值：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</div>` +
-    `<div class="recording-note">彩色球面跟随真实三维刚体自转；轨迹线是球心路径。</div>`;
+    `<div class="recording-note">同一三维台面模型；红球只改变入射初始旋转。</div>`;
 }
 
 export function spinOverlayStatus(run: SpinReversalRun): string {
@@ -151,7 +151,7 @@ export function spinOverlayStatus(run: SpinReversalRun): string {
     : run.comparison.outcome === 'near-zero'
       ? '第二跳接近不转'
       : '第二跳仍是下旋';
-  return `蓝色球：来源模型基线下旋减弱但没有反转；红色球：${comparisonOutcome}。两球使用同一来源接触模型，只改变入射初始旋转。`;
+  return `蓝球：标准条件·下旋减弱；红球：${comparisonOutcome}。`;
 }
 
 export function buildSpinTrajectoryLines(run: SpinReversalRun): THREE.Line[] {

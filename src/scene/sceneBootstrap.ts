@@ -51,9 +51,12 @@ export function createSceneBootstrap(): SceneBootstrap {
   camera.position.set(4000, 2500, 3500);
   camera.lookAt(1370, 380, -762);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const recordingMode = new URLSearchParams(window.location.search).get('recording') === 'spin-reversal';
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // A Retina browser otherwise renders a 4K back buffer for a 1080p capture.
+  // Recording mode stays at 1× so the browser can hold a stable 30/60 fps.
+  renderer.setPixelRatio(recordingMode ? 1 : Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.35;

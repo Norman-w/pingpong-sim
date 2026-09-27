@@ -1,6 +1,6 @@
 # 旋转反转专题录屏清单
 
-> 这份清单保留作参数参考；当前修复后的 v26 原始录屏和母版验收记录见父级 [`docs/spin-reversal-recording.md`](../../spin-reversal-recording.md)。
+> 这份清单保留作参数参考；当前修复后的 v27 原始录屏和母版验收记录见父级 [`docs/spin-reversal-recording.md`](../../spin-reversal-recording.md) 及 [`v27-media-manifest.md`](v27-media-manifest.md)。
 
 这份清单面向浏览器录屏和后续轻剪，目标是制作约 90 秒的 16:9 横版母版，再裁切 9:16 竖版。仿真已经完成；录屏按钮只负责切换展示、发射双球和启动自动回放，不会写出视频文件。
 
@@ -35,4 +35,4 @@
 
 ## 录制命名
 
-本轮 v26 原始录屏统一使用 `standard-clean.mov`、`critical-clean.mov`、`reversal-clean.mov`，每个 36 秒；合成时标准段取录屏第 6–36 秒，临界和过零段各取第 2–32 秒，三段分别对应 0–30、30–60、60 秒以后，确保片头和条件切换时画面已经有球在运动。原始录屏只放在仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/raw/`，不要将 `.mov`、`.mp4`、`.wav` 或剪辑工程提交到 Git。
+本轮 v27 原始录屏统一使用 `raw/v27/standard-30s.mov`、`raw/v27/critical-30s.mov`、`raw/v27/reversal-30s.mov`，每个 30 秒，均已抽帧确认 30 fps、900 帧和双球路；合成时间线按旁白锚点选择已验证的运动窗口，避免把“跨过零点”的解释放在空画面上。原始录屏只放在仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/raw/v27/`，不要将 `.mov`、`.mp4`、`.wav` 或剪辑工程提交到 Git。

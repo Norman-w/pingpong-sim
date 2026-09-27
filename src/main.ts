@@ -14,8 +14,10 @@ import { initTopicDemo, type TopicDemoApi, type DemoId } from './features/topicD
 import {
   initRecordingCamera,
   RECORDING_CAMERA_CYCLE_SECONDS,
+  type RecordingCameraPhase,
   type RecordingCameraApi,
 } from './features/recordingCamera';
+import { initRecordingEffects, type RecordingEffectsApi } from './features/recordingEffects';
 
 //#endregion
 
@@ -164,21 +166,42 @@ const recordingMode = new URLSearchParams(window.location.search).get('recording
 const requestedSpinMode = new URLSearchParams(window.location.search).get('mode');
 // Keep the live comparison balls on screen long enough for an external
 // recorder to show both bounces. The collider, impulses, and resulting RPM
-// values are unchanged; only recording playback time is slowed.
-const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.12 : 1;
+// values are unchanged; recording playback uses a stable 0.25× clock so the
+// 240 Hz solver advances predictably at common 30/60 fps capture rates.
+const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.25 : 1;
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
   ? requestedSpinMode
   : 'reversal';
 const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-reversal'
   ? initRecordingCamera({ camera, controls })
   : null;
-let recordingDemoRestartTimer: number | null = null;
+const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-reversal'
+  ? initRecordingEffects({ scene, tableTopY: TABLE_TOP_Y })
+  : null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
 const recordingPostSecondBounceSeconds = 0.22;
+let recordingCycleElapsed = 0;
+let recordingLaunchPending = false;
+const recordingImpactCounts = new WeakMap<RapierBall, number>();
 
-function startRecordingSpinCycle(): void {
+const recordingPhaseLabels: Record<RecordingCameraPhase, string> = {
+  establish: '开场 · 先看两球的起始状态',
+  approach: '推进 · 跟到球网和落点区域',
+  contact: '接触 · 看清落台和旋转变化',
+  hold: '停留 · 给数据和结论留出时间',
+};
+
+async function startRecordingSpinCycle(): Promise<void> {
+  if (recordingLaunchPending) return;
+  recordingLaunchPending = true;
+  recordingCycleElapsed = 0;
+  recordingEffects?.reset();
   recordingCamera?.reset();
-  void topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+  try {
+    await topicDemoApi.startSpinReversalDemo(recordingSpinMode);
+  } finally {
+    recordingLaunchPending = false;
+  }
 }
 
 function retireCompletedRecordingBalls(): void {
@@ -196,6 +219,30 @@ function retireCompletedRecordingBalls(): void {
     machineBallMeta.delete(ball.body);
     removeBall(ball);
   }
+}
+
+function updateRecordingImpactCues(): void {
+  if (recordingMode !== 'spin-reversal' || !recordingEffects) return;
+  for (const ball of getBalls()) {
+    const previous = recordingImpactCounts.get(ball) ?? 0;
+    if (ball.tableImpacts > previous && ball.lastTableImpact) {
+      for (let impact = previous + 1; impact <= ball.tableImpacts; impact += 1) {
+        recordingEffects.addImpactCue(
+          ball.lastTableImpact.x * 1000,
+          ball.lastTableImpact.z * 1000,
+          ball.recordingColor ?? 0xffffff,
+          impact,
+        );
+      }
+    }
+    recordingImpactCounts.set(ball, ball.tableImpacts);
+  }
+}
+
+function updateRecordingChapter(): void {
+  if (!recordingCamera) return;
+  const chapter = document.getElementById('spin-recording-chapter');
+  if (chapter) chapter.textContent = recordingPhaseLabels[recordingCamera.phase()];
 }
 
 setResetMachineOnClear(() => {
@@ -252,7 +299,14 @@ function animate(): void {
     lastT = now;
     return;
   }
-  const elapsedMs = Math.min(now - lastT, 100);
+  const rawElapsedSeconds = Math.max(0, (now - lastT) / 1000);
+  // A long browser/OS hitch must not be repaid by simulating 100 ms in one
+  // paint. In a recording take a duplicate frame is less damaging than a
+  // visible teleport across the table.
+  const elapsedSeconds = recordingMode === 'spin-reversal'
+    ? Math.min(rawElapsedSeconds, 1 / 30)
+    : Math.min(rawElapsedSeconds, 0.1);
+  const elapsedMs = elapsedSeconds * 1000;
   lastT = now;
 
   if (machineUiApi.machineRunning && now >= machineUiApi.nextMachineShotAt) {
@@ -265,12 +319,16 @@ function animate(): void {
   // Tracking slow motion never changes this physical time step. The ball
   // follows the same trajectory; only camera phase timing/interpolation uses
   // trackingSpeed.
-  physicsStep((elapsedMs / 1000) * recordingPhysicsTimeScale);
+  if (recordingMode === 'spin-reversal') recordingCycleElapsed += elapsedSeconds;
+  physicsStep(elapsedSeconds * recordingPhysicsTimeScale);
   retireCompletedRecordingBalls();
   syncMeshes();
-  trackingDemoApi.updateTrackingDemo(now, elapsedMs / 1000);
-  trackingReplayApi.updateReplay(elapsedMs / 1000);
-  recordingCamera?.update(elapsedMs / 1000);
+  updateRecordingImpactCues();
+  recordingEffects?.update(elapsedSeconds);
+  trackingDemoApi.updateTrackingDemo(now, elapsedSeconds);
+  trackingReplayApi.updateReplay(elapsedSeconds);
+  recordingCamera?.update(elapsedSeconds);
+  updateRecordingChapter();
 
   for (const ball of getBalls()) {
     const meta = machineBallMeta.get(ball.body);
@@ -325,6 +383,15 @@ function animate(): void {
   trackingReplayApi.syncSpinBillboardPosition();
   if (!recordingCamera) controls.update();
   renderer.render(scene, camera);
+
+  if (
+    recordingMode === 'spin-reversal' &&
+    recordingCycleElapsed >= recordingDemoRestartSeconds &&
+    getBalls().length === 0 &&
+    !recordingLaunchPending
+  ) {
+    void startRecordingSpinCycle();
+  }
 }
 
 setInterval(() => {
@@ -344,22 +411,20 @@ setInterval(() => {
   document.getElementById('bc')!.textContent = String(getBallCount());
 }, 5000);
 
-initPhysics().then(() => {
+const sceneAssetsReady = loadSceneStls(scene);
+
+Promise.all([initPhysics(), sceneAssetsReady]).then(() => {
   // The recording URL must wait for Rapier. Starting the topic one frame
   // earlier draws the planned paths but drops both physical balls because the
   // world is not ready yet.
   if (recordingMode === 'spin-reversal') {
     requestAnimationFrame(() => {
-      startRecordingSpinCycle();
+      void startRecordingSpinCycle();
     });
-    // Restart only after the two balls have completed their two-contact shot
-    // and have been retired. The short empty stage prevents a visible
-    // teleport from a late bounce back to the launch point.
-    recordingDemoRestartTimer = window.setInterval(() => {
-      if (!document.hidden) startRecordingSpinCycle();
-    }, recordingDemoRestartSeconds * 1000);
   }
   animate();
+}).catch((error: unknown) => {
+  console.error('[scene] startup failed', error);
 });
 //#endregion
 
@@ -391,5 +456,4 @@ window.addEventListener('resize', () => {
   renderer.setSize(c.clientWidth, c.clientHeight);
 });
 
-loadSceneStls(scene);
 //#endregion

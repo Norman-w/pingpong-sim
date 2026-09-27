@@ -1,6 +1,6 @@
 # 旋转反转专题验收记录
 
-> 这是旧模型历史记录，不能作为当前成片验收。当前物理审计和重新录制要求以 [`physics-model-audit.md`](../../physics-model-audit.md) 及父级 `docs/spin-reversal-recording.md` 为准。
+> 这是旧模型的代码与浏览器历史记录，不能作为当前成片验收。当前 v27 横版、竖版和音轨的规格与抽帧结果见 [`v27-media-manifest.md`](v27-media-manifest.md)；当前物理审计和科学口径以父级 [`docs/spin-reversal-recording.md`](../../spin-reversal-recording.md) 为准。
 
 ## 代码与运行环境
 
