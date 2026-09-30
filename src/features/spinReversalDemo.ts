@@ -140,13 +140,21 @@ export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
   const standardRpm = run.standard.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonLabel = comparisonDisplayLabel(run.comparisonProfile);
+  const focus = run.comparisonProfile.id === 'critical'
+    ? { tone: 'critical', label: '重点看红球 · 临界下旋：第二跳后接近不转' }
+    : run.comparisonProfile.id === 'high-grip'
+      ? { tone: 'reversal', label: '重点看红球 · 过零条件：第二跳后显示上旋' }
+      : { tone: 'standard', label: '重点看蓝球 · 标准条件：两次碰台后仍是下旋' };
+  const standardClass = focus.tone === 'standard' ? ' focus-line' : '';
+  const comparisonClass = focus.tone === 'standard' ? '' : ' focus-line';
   const outcome = run.comparison.outcome === 'reversed'
     ? '第二跳后过零，变成上旋'
     : run.comparison.outcome === 'near-zero'
       ? '第二跳后接近不转'
       : '第二跳后仍是下旋';
-  return `<div class="recording-result-line"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
-    `<div class="recording-result-line"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
+  return `<div class="recording-focus ${focus.tone}">${focus.label}</div>` +
+    `<div class="recording-result-line${standardClass}"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
+    `<div class="recording-result-line${comparisonClass}"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
     `<div class="recording-rpm">仿真计算值：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</div>` +
     `<div class="recording-note">球台一样，红球只调了出手时的下旋。</div>`;
 }

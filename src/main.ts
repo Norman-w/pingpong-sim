@@ -185,7 +185,11 @@ const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-rever
   ? initRecordingCamera({ camera, controls })
   : null;
 const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-reversal'
-  ? initRecordingEffects({ scene, tableTopY: TABLE_TOP_Y })
+  ? initRecordingEffects({
+    scene,
+    tableTopY: TABLE_TOP_Y,
+    focusBallLabel: recordingSpinMode === 'standard' ? '蓝球' : '红球',
+  })
   : null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
 const recordingPostSecondBounceSeconds = 0.22;
@@ -232,19 +236,43 @@ function retireCompletedRecordingBalls(): void {
 
 function updateRecordingImpactCues(): void {
   if (recordingMode !== 'spin-reversal' || !recordingEffects) return;
+  const pending: Array<{
+    ball: RapierBall;
+    impact: number;
+    event: RapierBall['tableImpactHistory'][number];
+  }> = [];
   for (const ball of getBalls()) {
     const previous = recordingImpactCounts.get(ball) ?? 0;
     if (ball.tableImpacts > previous && ball.lastTableImpact) {
       for (let impact = previous + 1; impact <= ball.tableImpacts; impact += 1) {
-        recordingEffects.addImpactCue(
-          ball.lastTableImpact.x * 1000,
-          ball.lastTableImpact.z * 1000,
-          ball.recordingColor ?? 0xffffff,
-          impact,
-        );
+        const event = ball.tableImpactHistory[impact - 1];
+        if (!event) continue;
+        pending.push({ ball, impact, event });
       }
     }
     recordingImpactCounts.set(ball, ball.tableImpacts);
+  }
+  // If both paths touch the table on the same simulation tick, put the path
+  // named by the current chapter on top so the event card agrees with the
+  // narration instead of being overwritten by iteration order.
+  const focusColor = recordingSpinMode === 'standard' ? 0x54d6ff : 0xff5d73;
+  pending.sort((left, right) => Number(left.ball.recordingColor === focusColor) - Number(right.ball.recordingColor === focusColor));
+  for (const item of pending) {
+    const ball = item.ball;
+    if (!ball.lastTableImpact) continue;
+    const ballLabel = ball.recordingColor === 0x54d6ff
+      ? '蓝球'
+      : ball.recordingColor === 0xff5d73
+        ? '红球'
+        : '球';
+    recordingEffects.addImpactCue(
+      ball.lastTableImpact.x * 1000,
+      ball.lastTableImpact.z * 1000,
+      ball.recordingColor ?? 0xffffff,
+      item.impact,
+      item.event,
+      ballLabel,
+    );
   }
 }
 
