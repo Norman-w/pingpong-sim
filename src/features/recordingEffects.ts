@@ -28,7 +28,11 @@ interface ImpactCue {
   stage: ForceStage;
   ballLabel: string;
   bounceIndex: number;
+  isFocus: boolean;
   contactSpeed: number;
+  slipDirection: string;
+  frictionDirection: string;
+  resultantDirection: string;
   before: number;
   after: number;
 }
@@ -69,6 +73,17 @@ export function initRecordingEffects(deps: {
   let eventTimer = 0;
   let activeCue: ImpactCue | null = null;
 
+  const vectorSign = (value: number, axis: string): string => {
+    if (Math.abs(value) < 1e-6) return '0';
+    return `${value > 0 ? '+' : '−'}${axis}`;
+  };
+
+  const planarDirection = (x: number, z: number): string =>
+    `(${vectorSign(x, 'x')}, ${vectorSign(z, 'z')})`;
+
+  const spatialDirection = (vector: THREE.Vector3): string =>
+    `(${vectorSign(vector.x, 'x')}, ${vectorSign(vector.y, 'y')}, ${vectorSign(vector.z, 'z')})`;
+
   const setArrowOpacity = (arrow: THREE.ArrowHelper, opacity: number): void => {
     for (const material of [arrow.line.material, arrow.cone.material]) {
       const materials = Array.isArray(material) ? material : [material];
@@ -105,6 +120,10 @@ export function initRecordingEffects(deps: {
     if (activeCue === cue) activeCue = null;
   };
 
+  const setActiveCue = (): void => {
+    activeCue = [...cues].reverse().find((cue) => cue.isFocus) ?? [...cues].reverse()[0] ?? null;
+  };
+
   const stageForAge = (age: number): ForceStage => {
     if (age < FORCE_PAUSE_SECONDS) return 'pause';
     if (age < FRICTION_FOCUS_END_SECONDS) return 'friction';
@@ -124,19 +143,19 @@ export function initRecordingEffects(deps: {
         `<span class="force-metrics">${metrics}</span>`;
     } else if (stage === 'friction') {
       eventEl.innerHTML = `<strong>${title} · 先看切向摩擦</strong><br>` +
-        line('force-on-ball', '橙箭头：台面对球的切向摩擦 ← 抵抗接触点滑动', true) + '<br>' +
-        line('force-on-table', '绿箭头：球对台面的擦动 → 方向相反', false) + '<br>' +
+        line('force-on-ball', `橙箭头：台面对球的切向摩擦 Jₜ ${cue.frictionDirection}（抵抗接触点滑动）`, true) + '<br>' +
+        line('force-on-table', `绿箭头：球对台面的擦动 v∥ ${cue.slipDirection}（方向相反）`, false) + '<br>' +
         `<span class="force-metrics">${metrics}</span>`;
     } else if (stage === 'normal') {
       eventEl.innerHTML = `<strong>${title} · 再看法向冲量</strong><br>` +
-        line('force-normal', '黄箭头：台面对球的法向冲量 ↑', true) + '<br>' +
+        line('force-normal', '黄箭头：台面对球的法向冲量 Jₙ (+y，离开台面)', true) + '<br>' +
         line('force-on-ball', '橙箭头：切向摩擦，改变接触点速度', false) + '<br>' +
         `<span class="force-metrics">${metrics}</span>`;
     } else {
       eventEl.innerHTML = `<strong>${title} · 看合力方向</strong><br>` +
-        line('force-resultant', '紫箭头：切向摩擦 + 法向冲量的合成方向', true) + '<br>' +
+        line('force-resultant', `紫箭头：Jₜ + Jₙ 的合成方向 ${cue.resultantDirection}`, true) + '<br>' +
         line('force-on-ball', '橙箭头：台面对球的切向摩擦', false) + '<br>' +
-        line('force-normal', '黄箭头：台面的法向冲量 ↑', false) + '<br>' +
+        line('force-normal', '黄箭头：台面的法向冲量 (+y)', false) + '<br>' +
         `<span class="force-metrics">${metrics}</span>`;
     }
     eventEl.classList.remove('force-stage-pause', 'force-stage-friction', 'force-stage-normal', 'force-stage-resultant');
@@ -187,7 +206,7 @@ export function initRecordingEffects(deps: {
     // on the ball. Both are derived from the resolver's measured contact slip.
     const frictionArrow = new THREE.ArrowHelper(
       friction,
-      contact.clone().add(new THREE.Vector3(0, 5, 0)),
+      contact.clone().add(new THREE.Vector3(0, 6, 0)),
       FRICTION_ARROW_LENGTH_MM,
       0xffae46,
       34,
@@ -195,7 +214,7 @@ export function initRecordingEffects(deps: {
     );
     const slipArrow = new THREE.ArrowHelper(
       slip,
-      contact.clone().add(new THREE.Vector3(0, 3, 0)),
+      contact.clone().add(new THREE.Vector3(0, 13, 0)),
       SLIP_ARROW_LENGTH_MM,
       0x5ee6a8,
       30,
@@ -203,7 +222,7 @@ export function initRecordingEffects(deps: {
     );
     const normalArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, 1, 0),
-      contact.clone().add(new THREE.Vector3(0, 2, 0)),
+      contact.clone().add(new THREE.Vector3(0, 4, 0)),
       NORMAL_ARROW_LENGTH_MM,
       0xffe27a,
       36,
@@ -218,7 +237,7 @@ export function initRecordingEffects(deps: {
     resultantVector.normalize();
     const resultantArrow = new THREE.ArrowHelper(
       resultantVector,
-      contact.clone().add(new THREE.Vector3(0, 12, 0)),
+      contact.clone().add(new THREE.Vector3(0, 22, 0)),
       RESULTANT_ARROW_LENGTH_MM,
       0xff7bf3,
       40,
@@ -258,14 +277,18 @@ export function initRecordingEffects(deps: {
       stage: 'pause',
       ballLabel,
       bounceIndex,
+      isFocus: ballLabel === deps.focusBallLabel,
       contactSpeed: Math.hypot(event.contactVx, event.contactVz),
+      slipDirection: planarDirection(event.contactVx, event.contactVz),
+      frictionDirection: planarDirection(-event.contactVx, -event.contactVz),
+      resultantDirection: spatialDirection(resultantVector),
       before: Math.round(event.beforeTopSpinRpm),
       after: Math.round(event.afterTopSpinRpm),
     };
     cues.push(cue);
-    activeCue = cue;
+    setActiveCue();
 
-    if (eventEl) {
+    if (eventEl && activeCue === cue) {
       renderEventCard(cue, 'pause');
       eventEl.classList.remove('visible', 'pulse');
       // Force the short pulse animation to restart for nearly simultaneous
@@ -290,24 +313,45 @@ export function initRecordingEffects(deps: {
       const radius = THREE.MathUtils.lerp(CUE_START_RADIUS_MM, CUE_END_RADIUS_MM, progress);
       cue.mesh.scale.setScalar(radius / CUE_START_RADIUS_MM);
       const opacity = 0.96 * (1 - progress);
-      cue.mesh.material.opacity = 0.9 * (1 - progress);
+      const focusFactor = cue.isFocus ? 1 : 0.28;
+      cue.mesh.material.opacity = 0.9 * (1 - progress) * focusFactor;
       const arrowFactors = stage === 'pause'
         ? { friction: 0, slip: 0, normal: 0, resultant: 0, rubbing: 0 }
         : stage === 'friction'
-          ? { friction: 1, slip: 0.18, normal: 0.14, resultant: 0, rubbing: 1 }
+          ? { friction: 1, slip: 0.52, normal: 0.14, resultant: 0, rubbing: 1 }
           : stage === 'normal'
-            ? { friction: 0.24, slip: 0.12, normal: 1, resultant: 0, rubbing: 0.35 }
-            : { friction: 0.78, slip: 0.34, normal: 0.82, resultant: 1, rubbing: 0.72 };
-      setArrowOpacity(cue.frictionArrow, opacity * arrowFactors.friction);
-      setArrowOpacity(cue.slipArrow, opacity * arrowFactors.slip);
-      setArrowOpacity(cue.normalArrow, opacity * arrowFactors.normal);
-      setArrowOpacity(cue.resultantArrow, opacity * arrowFactors.resultant);
-      cue.rubbingLine.material.opacity = opacity * arrowFactors.rubbing;
+            ? { friction: 0.24, slip: 0.22, normal: 1, resultant: 0, rubbing: 0.35 }
+            : { friction: 0.78, slip: 0.42, normal: 0.82, resultant: 1, rubbing: 0.72 };
+      const frictionReveal = stage === 'pause'
+        ? 0
+        : stage === 'friction'
+          ? THREE.MathUtils.smoothstep((cue.age - FORCE_PAUSE_SECONDS) / 0.36, 0, 1)
+          : 1;
+      const normalReveal = stage === 'normal'
+        ? THREE.MathUtils.smoothstep((cue.age - FRICTION_FOCUS_END_SECONDS) / 0.36, 0, 1)
+        : stage === 'resultant'
+          ? 1
+          : 0;
+      const resultantReveal = stage === 'resultant'
+        ? THREE.MathUtils.smoothstep((cue.age - NORMAL_FOCUS_END_SECONDS) / 0.36, 0, 1)
+        : 0;
+      const setArrowReveal = (arrow: THREE.ArrowHelper, factor: number, reveal: number): void => {
+        const eased = THREE.MathUtils.clamp(reveal, 0, 1);
+        arrow.scale.setScalar(0.14 + 0.86 * eased);
+        const visibility = factor <= 0 ? 0 : 0.14 + 0.86 * eased;
+        setArrowOpacity(arrow, opacity * factor * visibility * focusFactor);
+      };
+      setArrowReveal(cue.frictionArrow, arrowFactors.friction, frictionReveal);
+      setArrowReveal(cue.slipArrow, arrowFactors.slip, frictionReveal);
+      setArrowReveal(cue.normalArrow, arrowFactors.normal, normalReveal);
+      setArrowReveal(cue.resultantArrow, arrowFactors.resultant, resultantReveal);
+      cue.rubbingLine.material.opacity = opacity * arrowFactors.rubbing * focusFactor;
       const reveal = THREE.MathUtils.clamp((cue.age - FORCE_PAUSE_SECONDS) / 0.62, 0, 1);
       cue.rubbingLine.scale.setScalar(0.12 + 0.88 * THREE.MathUtils.smoothstep(reveal, 0, 1));
       if (progress >= 1) {
         disposeCue(cue);
         cues.splice(index, 1);
+        if (activeCue === null) setActiveCue();
       }
     }
     if (eventTimer > 0) {
