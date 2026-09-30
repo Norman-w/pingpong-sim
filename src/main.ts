@@ -194,9 +194,10 @@ const recordingImpactPauseSeconds = 0.90;
 // Between the first and second table contacts, keep a separate eased travel
 // phase. The collision model is unchanged; this only makes the measured arc
 // readable instead of letting the post-bounce flight flash past.
-const recordingBetweenBounceScale = 0.015;
-const recordingBetweenBounceRampInSeconds = 0.45;
-const recordingBetweenBounceRampOutSeconds = 0.85;
+const recordingBetweenBounceScale = 0.08;
+const recordingBetweenBounceStartScale = 0.03;
+const recordingBetweenBounceRampInSeconds = 0.72;
+const recordingBetweenBounceRampOutSeconds = 1.20;
 type RecordingContactSlowPhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 type RecordingBetweenBouncePhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
@@ -317,7 +318,11 @@ function recordingBetweenBouncePhysicsScale(): number {
   if (recordingBetweenBouncePhase === 'hold') return recordingBetweenBounceScale;
   if (recordingBetweenBouncePhase === 'ramp-in') {
     const eased = smoothstep01(recordingBetweenBouncePhaseElapsed / recordingBetweenBounceRampInSeconds);
-    return 1 + (recordingBetweenBounceScale - 1) * eased;
+    // Release the held contact from a small presentation speed. Starting
+    // this ramp at 1× made the first frame after the pause shoot across the
+    // table; starting at 0 made the ball look stuck. The small, eased start
+    // keeps the outgoing arc visible without a speed jump.
+    return recordingBetweenBounceStartScale + (recordingBetweenBounceScale - recordingBetweenBounceStartScale) * eased;
   }
   const eased = smoothstep01(recordingBetweenBouncePhaseElapsed / recordingBetweenBounceRampOutSeconds);
   return recordingBetweenBounceScale + (1 - recordingBetweenBounceScale) * eased;

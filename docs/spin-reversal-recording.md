@@ -1,8 +1,8 @@
 # 「一个球可以即是上旋球又是下旋球吗？」录屏与科普口径
 
-状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜。最新一轮已在 ChatCut Desktop 中组织为 v49，重新校验第一跳到第二跳的时间、两次接触停留和受力箭头方向；详细交付记录见 [`v49-delivery.md`](video/spin-reversal/v49-delivery.md)。
+状态：仿真专题已接入；本文是录屏执行稿和发布前的科学口径。当前录制使用 `pingpong-sim` 的真实 Three.js/Rapier 画面，并由录屏模式接管 Three.js 相机完成真实三维运镜。最新一轮已在 ChatCut Desktop 中组织为 v50，重新校验第一跳到第二跳的连续过渡、两次接触停留和单箭头受力分解；详细交付记录见 [`v50-delivery.md`](video/spin-reversal/v50-delivery.md)。
 
-录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)。v29 文档保留为历史基准；v49 的素材、时间线和导出验收见 [`v49-delivery.md`](video/spin-reversal/v49-delivery.md)。
+录制清单、旁白稿、字幕草稿、剪辑交接和本机验收记录见 [`docs/video/spin-reversal/`](video/spin-reversal/)。v29 文档保留为历史基准；v50 的素材、时间线和导出验收见 [`v50-delivery.md`](video/spin-reversal/v50-delivery.md)。
 
 ## 仿真基准
 
@@ -62,10 +62,10 @@
 
 本轮还修复了显示层的穿模源头：录屏球的渲染半径现在与 Rapier 的 20 mm 物理碰撞半径一致，不再使用会穿过台面和球网的 3.2 倍展示外壳；球面继续直接跟随刚体四元数，用四分之一球面配色让真实自转可读。连续浏览器验收中，球心始终保持在台面上方至少一个球半径，且没有出现跨帧的大幅瞬移。
 
-旧版本成片只保留在仓库外作历史对照，不能作为本轮交付；v49 最新横版交付文件为：
+旧版本成片只保留在仓库外作历史对照，不能作为本轮交付；v50 最新横版交付文件为：
 
-- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/chatcut/spin-reversal-horizontal-v49-time-checked-arrows.mp4`
-- 局域网视频预览：`http://192.168.7.187:8777/spin-reversal/exports/chatcut/spin-reversal-horizontal-v49-time-checked-arrows.mp4`
+- 横版母版：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/chatcut/spin-reversal-horizontal-v50-single-force-arrows.mp4`
+- 局域网视频预览：`http://192.168.7.187:8777/spin-reversal/exports/chatcut/spin-reversal-horizontal-v50-single-force-arrows.mp4`
 
 此前 v29 文件仍保留为历史对照：
 
