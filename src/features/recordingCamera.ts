@@ -8,6 +8,7 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 // toward the contact area, then hold. The camera never orbits or reverses while
 // the balls are in flight.
 export const RECORDING_CAMERA_CYCLE_SECONDS = 12;
+export type RecordingCameraShot = 'overview' | 'contact' | 'force';
 export type RecordingCameraPhase = 'establish' | 'approach' | 'contact' | 'hold';
 interface RecordingCameraKeyframe {
   time: number;
@@ -16,7 +17,7 @@ interface RecordingCameraKeyframe {
   fov: number;
 }
 
-const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
+const OVERVIEW_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   { time: 0, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
   { time: 0.45, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
   // Finish the one constant-speed push before the first contact slow window.
@@ -25,6 +26,35 @@ const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   { time: 1.35, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
   { time: 12, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
 ];
+
+// Detail takes keep one calm dolly, then hold a close three-dimensional view.
+// The focus point is supplied by the measured impact event in main.ts, so the
+// camera can move to the actual contact instead of an invented screen point.
+const CONTACT_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
+  { time: 0, position: [3900, 1750, 1250], target: [1320, 650, -762.5], fov: 48 },
+  { time: 0.55, position: [3900, 1750, 1250], target: [1320, 650, -762.5], fov: 48 },
+  { time: 1.8, position: [2350, 1120, 460], target: [1150, 760, -762.5], fov: 42 },
+  { time: 12, position: [2350, 1120, 460], target: [1150, 760, -762.5], fov: 42 },
+];
+
+const FORCE_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
+  { time: 0, position: [3600, 1500, 1050], target: [1320, 650, -762.5], fov: 48 },
+  { time: 0.55, position: [3600, 1500, 1050], target: [1320, 650, -762.5], fov: 48 },
+  { time: 1.9, position: [1850, 980, 260], target: [1050, 760, -762.5], fov: 38 },
+  { time: 12, position: [1850, 980, 260], target: [1050, 760, -762.5], fov: 38 },
+];
+
+function keyframesForShot(shot: RecordingCameraShot): readonly RecordingCameraKeyframe[] {
+  if (shot === 'contact') return CONTACT_CAMERA_KEYFRAMES;
+  if (shot === 'force') return FORCE_CAMERA_KEYFRAMES;
+  return OVERVIEW_CAMERA_KEYFRAMES;
+}
+
+function focusAnchorForShot(shot: RecordingCameraShot): THREE.Vector3 | null {
+  if (shot === 'contact') return new THREE.Vector3(1150, 760, -762.5);
+  if (shot === 'force') return new THREE.Vector3(1050, 760, -762.5);
+  return null;
+}
 //#endregion
 
 //#region 模型/类型
@@ -37,6 +67,8 @@ export interface RecordingCameraApi {
 interface RecordingCameraDeps {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
+  shot?: RecordingCameraShot;
+  getFocusPoint?: () => THREE.Vector3 | null;
 }
 //#endregion
 
@@ -62,8 +94,13 @@ function phaseForTime(time: number): RecordingCameraPhase {
  * steady hold. There is no orbit, zoom, or direction change during contact.
  */
 export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraApi {
+  const shot = deps.shot ?? 'overview';
+  const keyframes = keyframesForShot(shot);
+  const focusAnchor = focusAnchorForShot(shot);
   let elapsedSeconds = 0;
   let appliedFov = Number.NaN;
+  const smoothFocus = new THREE.Vector3();
+  let hasSmoothFocus = false;
 
   const applyPose = (position: readonly number[], target: readonly number[], fov: number): void => {
     deps.camera.position.set(position[0], position[1], position[2]);
@@ -76,19 +113,20 @@ export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraA
 
   const reset = (): void => {
     elapsedSeconds = 0;
-    const first = RECORDING_CAMERA_KEYFRAMES[0];
+    hasSmoothFocus = false;
+    const first = keyframes[0];
     applyPose(first.position, first.target, first.fov);
   };
 
   const update = (deltaSeconds: number): void => {
     elapsedSeconds = (elapsedSeconds + Math.max(0, deltaSeconds)) % RECORDING_CAMERA_CYCLE_SECONDS;
     const time = elapsedSeconds;
-    let from = RECORDING_CAMERA_KEYFRAMES[0];
-    let to = RECORDING_CAMERA_KEYFRAMES[1];
-    for (let index = 1; index < RECORDING_CAMERA_KEYFRAMES.length; index += 1) {
-      if (time <= RECORDING_CAMERA_KEYFRAMES[index].time) {
-        from = RECORDING_CAMERA_KEYFRAMES[index - 1];
-        to = RECORDING_CAMERA_KEYFRAMES[index];
+    let from = keyframes[0];
+    let to = keyframes[1];
+    for (let index = 1; index < keyframes.length; index += 1) {
+      if (time <= keyframes[index].time) {
+        from = keyframes[index - 1];
+        to = keyframes[index];
         break;
       }
     }
@@ -106,6 +144,23 @@ export function initRecordingCamera(deps: RecordingCameraDeps): RecordingCameraA
       deps.camera.fov = fov;
       deps.camera.updateProjectionMatrix();
       appliedFov = fov;
+    }
+
+    // Detail shots are still real camera moves. Once a measured contact is
+    // available, shift the held pose toward that contact with a short smooth
+    // blend. The overview take deliberately keeps the whole table visible.
+    const rawFocus = shot === 'overview' ? null : deps.getFocusPoint?.() ?? null;
+    if (rawFocus && focusAnchor) {
+      if (!hasSmoothFocus) {
+        smoothFocus.copy(rawFocus);
+        hasSmoothFocus = true;
+      } else {
+        smoothFocus.lerp(rawFocus, THREE.MathUtils.clamp(deltaSeconds * 7, 0, 1));
+      }
+      const focusDelta = smoothFocus.clone().sub(focusAnchor);
+      deps.camera.position.add(focusDelta);
+      deps.controls.target.add(focusDelta);
+      deps.camera.lookAt(deps.controls.target);
     }
   };
 

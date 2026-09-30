@@ -157,6 +157,7 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("standard", "critical", "reversal"), default="standard")
+    parser.add_argument("--shot", choices=("overview", "contact", "force"), default="overview")
     parser.add_argument("--frames", type=int, default=720)
     parser.add_argument("--fps", type=int, choices=(30, 60), default=60)
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -181,7 +182,7 @@ def main() -> None:
     profile_dir = Path(tempfile.mkdtemp(prefix="pingpong-cdp-"))
     url = (
         "http://192.168.7.187:5173/pingpong-sim/"
-        f"?recording=spin-reversal&recordingFps={args.fps}&mode={args.mode}&manual=1"
+        f"?recording=spin-reversal&recordingFps={args.fps}&mode={args.mode}&recordingShot={args.shot}&manual=1"
     )
     chrome_args = [
         str(args.chrome),
@@ -261,6 +262,7 @@ def main() -> None:
                     {
                         "frame": index,
                         "time": timestamp / 1000,
+                        "chapter": evaluate(cdp, "document.getElementById('spin-recording-chapter')?.textContent || ''"),
                         "balls": evaluate(
                             cdp,
                             "JSON.parse(document.getElementById('bc')?.dataset.allTelemetry || '[]')",
@@ -282,7 +284,7 @@ def main() -> None:
         if args.telemetry_out:
             args.telemetry_out.parent.mkdir(parents=True, exist_ok=True)
             args.telemetry_out.write_text(json.dumps(telemetry, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"mode": args.mode, "frames": args.frames, "fps": args.fps, "outDir": str(args.out_dir)}))
+        print(json.dumps({"mode": args.mode, "shot": args.shot, "frames": args.frames, "fps": args.fps, "outDir": str(args.out_dir)}))
     finally:
         if cdp is not None:
             cdp.close()
