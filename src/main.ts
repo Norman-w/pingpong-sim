@@ -176,8 +176,16 @@ const recordingCaptureFps = Number.isFinite(requestedRecordingFps) && requestedR
 // collision resolver still receives the same physical velocities and applies
 // the same impulses; this is presentation timing for the recording take.
 const recordingContactSlowScale = 0.025;
-const recordingContactPreRollSeconds = 0.08;
-const recordingContactSlowWindowSeconds = 4;
+// Begin the presentation ramp shortly before the measured table crossing so
+// the ball reaches the very slow part at contact instead of jumping into it.
+const recordingContactPreRollSeconds = 0.12;
+const recordingContactRampInSeconds = 0.12;
+const recordingContactHoldSeconds = 3.25;
+const recordingContactRampOutSeconds = 0.45;
+// A real contact frame is held for the force callout. This is presentation
+// timing only; the resolver and its measured impulses are unchanged.
+const recordingImpactPauseSeconds = 0.42;
+type RecordingContactSlowPhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
   ? requestedSpinMode
   : 'reversal';
@@ -196,7 +204,9 @@ const recordingPostSecondBounceSeconds = 0.28;
 let recordingCycleElapsed = 0;
 let recordingLaunchPending = false;
 const recordingImpactCounts = new WeakMap<RapierBall, number>();
-let recordingContactSlowRemaining = 0;
+let recordingContactSlowPhase: RecordingContactSlowPhase = 'idle';
+let recordingContactSlowPhaseElapsed = 0;
+let recordingImpactPauseRemaining = 0;
 let recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
 
 const recordingPhaseLabels: Record<RecordingCameraPhase, string> = {
@@ -210,7 +220,9 @@ async function startRecordingSpinCycle(): Promise<void> {
   if (recordingLaunchPending) return;
   recordingLaunchPending = true;
   recordingCycleElapsed = 0;
-  recordingContactSlowRemaining = 0;
+  recordingContactSlowPhase = 'idle';
+  recordingContactSlowPhaseElapsed = 0;
+  recordingImpactPauseRemaining = 0;
   recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
   recordingEffects?.reset();
   recordingCamera?.reset();
@@ -234,15 +246,53 @@ function secondsToNextTableContact(ball: RapierBall): number | null {
 }
 
 function startContactSlowMotionIfNeeded(): void {
-  if (recordingMode !== 'spin-reversal' || recordingContactSlowRemaining > 0) return;
+  if (recordingMode !== 'spin-reversal' || recordingContactSlowPhase !== 'idle') return;
   for (const ball of getBalls()) {
     const impactIndex = ball.tableImpacts;
     if (impactIndex >= 2 || recordingContactSlowTriggerCounts.get(ball) === impactIndex) continue;
     const secondsToImpact = secondsToNextTableContact(ball);
     if (secondsToImpact === null || secondsToImpact > recordingContactPreRollSeconds) continue;
     recordingContactSlowTriggerCounts.set(ball, impactIndex);
-    recordingContactSlowRemaining = recordingContactSlowWindowSeconds;
+    recordingContactSlowPhase = 'ramp-in';
+    recordingContactSlowPhaseElapsed = 0;
     return;
+  }
+}
+
+function smoothstep01(progress: number): number {
+  const t = Math.max(0, Math.min(1, progress));
+  return t * t * (3 - 2 * t);
+}
+
+function recordingContactPhysicsScale(): number {
+  if (recordingContactSlowPhase === 'idle') return 1;
+  if (recordingContactSlowPhase === 'hold') return recordingContactSlowScale;
+  if (recordingContactSlowPhase === 'ramp-in') {
+    const eased = smoothstep01(recordingContactSlowPhaseElapsed / recordingContactRampInSeconds);
+    return 1 + (recordingContactSlowScale - 1) * eased;
+  }
+  const eased = smoothstep01(recordingContactSlowPhaseElapsed / recordingContactRampOutSeconds);
+  return recordingContactSlowScale + (1 - recordingContactSlowScale) * eased;
+}
+
+function advanceRecordingContactSlowPhase(deltaSeconds: number): void {
+  let remaining = Math.max(0, deltaSeconds);
+  while (remaining > 0 && recordingContactSlowPhase !== 'idle') {
+    const duration = recordingContactSlowPhase === 'ramp-in'
+      ? recordingContactRampInSeconds
+      : recordingContactSlowPhase === 'hold'
+        ? recordingContactHoldSeconds
+        : recordingContactRampOutSeconds;
+    const untilBoundary = Math.max(0, duration - recordingContactSlowPhaseElapsed);
+    if (remaining < untilBoundary) {
+      recordingContactSlowPhaseElapsed += remaining;
+      return;
+    }
+    remaining = Math.max(0, remaining - untilBoundary);
+    if (recordingContactSlowPhase === 'ramp-in') recordingContactSlowPhase = 'hold';
+    else if (recordingContactSlowPhase === 'hold') recordingContactSlowPhase = 'ramp-out';
+    else recordingContactSlowPhase = 'idle';
+    recordingContactSlowPhaseElapsed = 0;
   }
 }
 
@@ -302,6 +352,7 @@ function updateRecordingImpactCues(): void {
       item.event,
       ballLabel,
     );
+    recordingImpactPauseRemaining = Math.max(recordingImpactPauseRemaining, recordingImpactPauseSeconds);
   }
 }
 
@@ -309,9 +360,19 @@ function updateRecordingChapter(): void {
   if (!recordingCamera) return;
   const chapter = document.getElementById('spin-recording-chapter');
   if (!chapter) return;
-  chapter.textContent = recordingContactSlowRemaining > 0
-    ? `接触慢放 · ${recordingContactSlowScale.toFixed(3)}×`
-    : recordingPhaseLabels[recordingCamera.phase()];
+  if (recordingImpactPauseRemaining > 0) {
+    chapter.textContent = '接触停帧 · 先看接触点，再看受力箭头';
+  } else if (recordingContactSlowPhase !== 'idle') {
+    const scale = recordingContactPhysicsScale();
+    const phaseLabel = recordingContactSlowPhase === 'ramp-in'
+      ? '缓入'
+      : recordingContactSlowPhase === 'ramp-out'
+        ? '缓出'
+        : `${scale.toFixed(3)}×`;
+    chapter.textContent = `接触慢放 · ${phaseLabel}`;
+  } else {
+    chapter.textContent = recordingPhaseLabels[recordingCamera.phase()];
+  }
 }
 
 setResetMachineOnClear(() => {
@@ -390,11 +451,11 @@ function animate(): void {
   // trackingSpeed.
   if (recordingMode === 'spin-reversal') recordingCycleElapsed += elapsedSeconds;
   startContactSlowMotionIfNeeded();
-  const recordingScale = recordingContactSlowRemaining > 0 ? recordingContactSlowScale : 1;
+  const impactPauseActive = recordingImpactPauseRemaining > 0;
+  const recordingScale = impactPauseActive ? 0 : recordingContactPhysicsScale();
   physicsStep(elapsedSeconds * recordingScale);
-  if (recordingContactSlowRemaining > 0) {
-    recordingContactSlowRemaining = Math.max(0, recordingContactSlowRemaining - elapsedSeconds);
-  }
+  if (impactPauseActive) recordingImpactPauseRemaining = Math.max(0, recordingImpactPauseRemaining - elapsedSeconds);
+  else advanceRecordingContactSlowPhase(elapsedSeconds);
   retireCompletedRecordingBalls();
   syncMeshes();
   updateRecordingImpactCues();
