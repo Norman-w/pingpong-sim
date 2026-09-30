@@ -178,26 +178,25 @@ const recordingCaptureFps = Number.isFinite(requestedRecordingFps) && requestedR
 const recordingCameraShot: RecordingCameraShot = requestedRecordingShot === 'contact' || requestedRecordingShot === 'force'
   ? requestedRecordingShot
   : 'overview';
-// Keep flight at real speed and slow only the short contact window. The
-// collision resolver still receives the same physical velocities and applies
-// the same impulses; this is presentation timing for the recording take.
-const recordingContactSlowScale = 0.025;
+// Keep the measured collision and make the contact readable in the recording.
+// The resolver still receives the same physical velocities and applies the
+// same impulses; these scales only stretch presentation time for the take.
+const recordingContactSlowScale = 0.02;
 // Begin the presentation ramp shortly before the measured table crossing so
 // the ball reaches the very slow part at contact instead of jumping into it.
-const recordingContactPreRollSeconds = 0.12;
-const recordingContactRampInSeconds = 0.12;
-const recordingContactHoldSeconds = 3.25;
-const recordingContactRampOutSeconds = 0.45;
+const recordingContactPreRollSeconds = 0.16;
+const recordingContactRampInSeconds = 0.28;
+const recordingContactHoldSeconds = 3.6;
+const recordingContactRampOutSeconds = 0.72;
 // A real contact frame is held for the force callout. This is presentation
 // timing only; the resolver and its measured impulses are unchanged.
-const recordingImpactPauseSeconds = 0.42;
+const recordingImpactPauseSeconds = 0.90;
 // Between the first and second table contacts, keep a separate eased travel
 // phase. The collision model is unchanged; this only makes the measured arc
 // readable instead of letting the post-bounce flight flash past.
-const recordingBetweenBounceScale = 0.08;
-const recordingBetweenBounceRampInSeconds = 0.70;
-const recordingBetweenBounceRampOutSeconds = 0.35;
-const recordingBetweenBouncePreRollSeconds = 0.18;
+const recordingBetweenBounceScale = 0.015;
+const recordingBetweenBounceRampInSeconds = 0.45;
+const recordingBetweenBounceRampOutSeconds = 0.85;
 type RecordingContactSlowPhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 type RecordingBetweenBouncePhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
@@ -225,6 +224,7 @@ let recordingLaunchPending = false;
 const recordingImpactCounts = new WeakMap<RapierBall, number>();
 let recordingContactSlowPhase: RecordingContactSlowPhase = 'idle';
 let recordingContactSlowPhaseElapsed = 0;
+let recordingContactSlowStartedFromBetween = false;
 let recordingImpactPauseRemaining = 0;
 let recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
 let recordingBetweenBouncePhase: RecordingBetweenBouncePhase = 'idle';
@@ -245,6 +245,7 @@ async function startRecordingSpinCycle(): Promise<void> {
   recordingCycleElapsed = 0;
   recordingContactSlowPhase = 'idle';
   recordingContactSlowPhaseElapsed = 0;
+  recordingContactSlowStartedFromBetween = false;
   recordingImpactPauseRemaining = 0;
   recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
   recordingBetweenBouncePhase = 'idle';
@@ -282,7 +283,8 @@ function startContactSlowMotionIfNeeded(): void {
     if (impactIndex >= 2 || recordingContactSlowTriggerCounts.get(ball) === impactIndex) continue;
     const secondsToImpact = secondsToNextTableContact(ball);
     if (secondsToImpact === null || secondsToImpact > recordingContactPreRollSeconds) continue;
-    if (recordingBetweenBouncePhase !== 'idle' && impactIndex >= 1) {
+    recordingContactSlowStartedFromBetween = recordingBetweenBouncePhase !== 'idle' && impactIndex >= 1;
+    if (recordingContactSlowStartedFromBetween) {
       recordingBetweenBouncePhase = 'ramp-out';
       recordingBetweenBouncePhaseElapsed = 0;
     }
@@ -303,7 +305,8 @@ function recordingContactPhysicsScale(): number {
   if (recordingContactSlowPhase === 'hold') return recordingContactSlowScale;
   if (recordingContactSlowPhase === 'ramp-in') {
     const eased = smoothstep01(recordingContactSlowPhaseElapsed / recordingContactRampInSeconds);
-    return 1 + (recordingContactSlowScale - 1) * eased;
+    const startScale = recordingContactSlowStartedFromBetween ? recordingBetweenBounceScale : 1;
+    return startScale + (recordingContactSlowScale - startScale) * eased;
   }
   const eased = smoothstep01(recordingContactSlowPhaseElapsed / recordingContactRampOutSeconds);
   return recordingContactSlowScale + (1 - recordingContactSlowScale) * eased;
@@ -436,7 +439,17 @@ function updateRecordingImpactCues(): void {
         TABLE_TOP_Y + 8,
         ball.lastTableImpact.z * 1000,
       );
-      if (item.impact === 1) recordingBetweenBouncePending = true;
+      if (item.impact === 1) {
+        recordingBetweenBouncePending = true;
+        // The contact cue remains on screen for its force explanation. The
+        // physical clock leaves the first-contact window immediately after
+        // the held contact frame so the first→second-bounce arc gets its own
+        // deliberately slow, eased travel phase.
+        if (recordingContactSlowPhase !== 'idle') {
+          recordingContactSlowPhase = 'idle';
+          recordingContactSlowPhaseElapsed = 0;
+        }
+      }
       if (item.impact >= 2) {
         recordingBetweenBouncePending = false;
         if (recordingBetweenBouncePhase !== 'idle') {
@@ -553,13 +566,16 @@ function animate(): void {
   if (recordingMode === 'spin-reversal') recordingCycleElapsed += elapsedSeconds;
   startContactSlowMotionIfNeeded();
   const impactPauseActive = recordingImpactPauseRemaining > 0;
+  // Start the eased first→second-bounce travel before stepping physics on the
+  // first frame after the contact hold. This avoids one accidental full-speed
+  // frame that would make the outgoing arc jump.
+  if (!impactPauseActive) startRecordingBetweenBounceIfNeeded();
   const recordingScale = impactPauseActive ? 0 : recordingContactPhysicsScale();
   physicsStep(elapsedSeconds * recordingScale);
   if (impactPauseActive) recordingImpactPauseRemaining = Math.max(0, recordingImpactPauseRemaining - elapsedSeconds);
   else {
     advanceRecordingContactSlowPhase(elapsedSeconds);
     advanceRecordingBetweenBouncePhase(elapsedSeconds);
-    startRecordingBetweenBounceIfNeeded();
   }
   retireCompletedRecordingBalls();
   syncMeshes();

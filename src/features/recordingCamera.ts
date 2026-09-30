@@ -7,7 +7,10 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 // One deliberate move: establish the whole table, make a constant-speed push
 // toward the contact area, then hold. The camera never orbits or reverses while
 // the balls are in flight.
-export const RECORDING_CAMERA_CYCLE_SECONDS = 12;
+// The second contact is deliberately given a long, calm travel section in
+// the recording take.  The camera therefore holds the useful 3D view instead
+// of resetting while the source animation is still crossing the table.
+export const RECORDING_CAMERA_CYCLE_SECONDS = 20;
 export type RecordingCameraShot = 'overview' | 'contact' | 'force';
 export type RecordingCameraPhase = 'establish' | 'approach' | 'contact' | 'hold';
 interface RecordingCameraKeyframe {
@@ -24,7 +27,7 @@ const OVERVIEW_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   // The camera then holds this readable 3D contact view while the ball is
   // slowed at the table instead of drifting through the collision.
   { time: 1.35, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
-  { time: 12, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
+  { time: 20, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
 ];
 
 // Detail takes keep one calm dolly, then hold a close three-dimensional view.
@@ -34,14 +37,14 @@ const CONTACT_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   { time: 0, position: [3900, 1750, 1250], target: [1320, 650, -762.5], fov: 48 },
   { time: 0.55, position: [3900, 1750, 1250], target: [1320, 650, -762.5], fov: 48 },
   { time: 1.8, position: [2350, 1120, 460], target: [1150, 760, -762.5], fov: 42 },
-  { time: 12, position: [2350, 1120, 460], target: [1150, 760, -762.5], fov: 42 },
+  { time: 20, position: [2350, 1120, 460], target: [1150, 760, -762.5], fov: 42 },
 ];
 
 const FORCE_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   { time: 0, position: [3600, 1500, 1050], target: [1320, 650, -762.5], fov: 48 },
   { time: 0.55, position: [3600, 1500, 1050], target: [1320, 650, -762.5], fov: 48 },
   { time: 1.9, position: [1850, 980, 260], target: [1050, 760, -762.5], fov: 38 },
-  { time: 12, position: [1850, 980, 260], target: [1050, 760, -762.5], fov: 38 },
+  { time: 20, position: [1850, 980, 260], target: [1050, 760, -762.5], fov: 38 },
 ];
 
 function keyframesForShot(shot: RecordingCameraShot): readonly RecordingCameraKeyframe[] {
@@ -81,7 +84,7 @@ const toTargetScratch = new THREE.Vector3();
 function phaseForTime(time: number): RecordingCameraPhase {
   if (time < 0.45) return 'establish';
   if (time < 1.35) return 'approach';
-  if (time < 8.5) return 'contact';
+  if (time < 15.5) return 'contact';
   return 'hold';
 }
 //#endregion
