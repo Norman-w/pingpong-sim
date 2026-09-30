@@ -61,13 +61,14 @@ const balls: RapierBall[] = [];
 interface RenderState {
   previousPosition: THREE.Vector3;
   previousQuaternion: THREE.Quaternion;
-  snapToCurrent: boolean;
 }
 
 // Rapier advances on a fixed 240 Hz clock while the browser paints at an
 // unrelated cadence. Keeping the last completed transform lets the renderer
 // interpolate instead of holding a frame and then jumping several fixed steps
-// when the recording runs at 30/60 Hz.
+// when the recording runs at 30/60 Hz. Impact correction stays inside this
+// interpolation window; snapping to the post-impact transform made the ball
+// visibly skip one rendered frame at each table contact.
 const renderStates = new Map<RapierBall, RenderState>();
 const currentPositionScratch = new THREE.Vector3();
 const interpolatedPositionScratch = new THREE.Vector3();
@@ -318,7 +319,6 @@ export function createBall(
   renderStates.set(ball, {
     previousPosition: new THREE.Vector3(initialPosition.x, initialPosition.y, initialPosition.z),
     previousQuaternion: new THREE.Quaternion(initialRotation.x, initialRotation.y, initialRotation.z, initialRotation.w),
-    snapToCurrent: false,
   });
   return ball;
 }
@@ -361,10 +361,7 @@ export function step(elapsedSeconds: number): void {
     }
     applyAerodynamics();
     for (const ball of balls) {
-      const impactCountBefore = ball.tableImpacts;
       resolveTableImpact(ball);
-      const render = renderStates.get(ball);
-      if (render && ball.tableImpacts !== impactCountBefore) render.snapToCurrent = true;
       applyTableRollingResistance(ball);
     }
     world.step();
@@ -382,10 +379,9 @@ export function syncMeshes(): void {
     const p = ball.body.translation();
     const r = ball.body.rotation();
     const render = renderStates.get(ball);
-    if (!render || render.snapToCurrent) {
+    if (!render) {
       ball.mesh.position.set(p.x * MM_PER_M, p.y * MM_PER_M, p.z * MM_PER_M);
       ball.mesh.quaternion.set(r.x, r.y, r.z, r.w);
-      if (render) render.snapToCurrent = false;
       continue;
     }
     currentPositionScratch.set(p.x, p.y, p.z);

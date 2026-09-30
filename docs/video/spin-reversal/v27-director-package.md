@@ -25,8 +25,8 @@
 
 ## 录制操作
 
-1. 启动 `npm run dev -- --host 0.0.0.0 --port 5173`，用 1920×1080 Chrome 窗口打开 `?recording=spin-reversal&mode=standard`、`critical`、`reversal`。
-2. 等标题、STL 台面、网、指标卡全部出现后再开始外部窗口录制；每个条件录 30 秒、30 fps，文件保存为 `raw/v27/standard-30s.mov`、`critical-30s.mov`、`reversal-30s.mov`。
+1. 启动 `npm run dev -- --host 0.0.0.0 --port 5173`，用 1920×1080 Chrome 窗口打开 `?recording=spin-reversal&recordingFps=60&mode=standard`、`critical`、`reversal`。
+2. 等标题、STL 台面、网、指标卡全部出现后再开始外部窗口录制；每个条件录 30 秒、60 fps，文件保存为 `raw/v27/standard-60s.mov`、`critical-60s.mov`、`reversal-60s.mov`。
 3. 录制期间不点网页暂停、不按 Space、不拖动鼠标到画面中央；录屏模式已经禁用 OrbitControls。
 4. 片头、标准、临界和过零段按旁白时间轴从三条已验证原片抽取；机制和结论段允许重复使用过零片的稳定周期，但要用数据字幕明确这是解释镜头，不是新的物理试验。当前导出的实际规格与抽帧证据见 [`v27-media-manifest.md`](v27-media-manifest.md)。
 5. 竖版不是横版缩小加黑边：以球、第二跳和指标卡为中心裁切，标题放上方、字幕放下方；若画面会裁掉网或落点，宁可保留横版母版，不强行输出竖版。

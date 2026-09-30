@@ -49,7 +49,7 @@ audio/voiceover_zh-CN_sandy_v09.srt
 开发服务监听 `0.0.0.0:5174` 时，局域网设备可以直接打开：
 
 ```text
-http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal
+http://192.168.7.187:5174/pingpong-sim/?recording=spin-reversal&mode=reversal&recordingFps=60
 ```
 
 这个地址会自动进入干净舞台、发射基线/过零初始旋转双球并启动自动慢放。要看临界初始旋转，把 `mode=reversal` 改为 `mode=critical`；不带 `recording` 参数时仍是普通交互页面。设备需要与这台 Mac 位于同一局域网，且 Mac 防火墙允许 TCP 5174。

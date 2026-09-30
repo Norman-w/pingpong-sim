@@ -164,6 +164,13 @@ topicDemoApi = initTopicDemo({
 
 const recordingMode = new URLSearchParams(window.location.search).get('recording');
 const requestedSpinMode = new URLSearchParams(window.location.search).get('mode');
+const requestedRecordingFps = Number(new URLSearchParams(window.location.search).get('recordingFps'));
+// The external capture target is 60 fps by default. A capped elapsed step
+// keeps one long browser hitch from teleporting the ball across a whole
+// capture interval; the browser can hold the previous canvas frame instead.
+const recordingCaptureFps = Number.isFinite(requestedRecordingFps) && requestedRecordingFps >= 24 && requestedRecordingFps <= 60
+  ? requestedRecordingFps
+  : 60;
 // Keep the live comparison balls on screen long enough for an external
 // recorder to show both bounces. The collider, impulses, and resulting RPM
 // values are unchanged; recording playback uses a stable 0.25× clock so the
@@ -304,7 +311,7 @@ function animate(): void {
   // paint. In a recording take a duplicate frame is less damaging than a
   // visible teleport across the table.
   const elapsedSeconds = recordingMode === 'spin-reversal'
-    ? Math.min(rawElapsedSeconds, 1 / 30)
+    ? Math.min(rawElapsedSeconds, 1 / recordingCaptureFps)
     : Math.min(rawElapsedSeconds, 0.1);
   const elapsedMs = elapsedSeconds * 1000;
   lastT = now;
