@@ -84,6 +84,20 @@ export function initRecordingEffects(deps: {
   const spatialDirection = (vector: THREE.Vector3): string =>
     `(${vectorSign(vector.x, 'x')}, ${vectorSign(vector.y, 'y')}, ${vectorSign(vector.z, 'z')})`;
 
+  const arrowFlowPhase = (age: number, stageStart: number): number => {
+    const phase = (Math.max(0, age - stageStart) / 0.92) % 1;
+    return phase < 0 ? phase + 1 : phase;
+  };
+
+  const moveArrowHead = (arrow: THREE.ArrowHelper, length: number, phase: number): void => {
+    // ArrowHelper's cone is oriented along its local +Y axis. Moving that
+    // cone in local space keeps the shaft fixed while the arrowhead visibly
+    // travels in the actual world-space direction of the vector.
+    arrow.scale.setScalar(1);
+    arrow.cone.position.y = length * (0.08 + 0.92 * phase);
+    arrow.cone.updateMatrix();
+  };
+
   const setArrowOpacity = (arrow: THREE.ArrowHelper, opacity: number): void => {
     for (const material of [arrow.line.material, arrow.cone.material]) {
       const materials = Array.isArray(material) ? material : [material];
@@ -143,8 +157,8 @@ export function initRecordingEffects(deps: {
         `<span class="force-metrics">${metrics}</span>`;
     } else if (stage === 'friction') {
       eventEl.innerHTML = `<strong>${title} · 先看切向摩擦</strong><br>` +
-        line('force-on-ball', `橙箭头：台面对球的切向摩擦 Jₜ ${cue.frictionDirection}（抵抗接触点滑动）`, true) + '<br>' +
-        line('force-on-table', `绿箭头：球对台面的擦动 v∥ ${cue.slipDirection}（方向相反）`, false) + '<br>' +
+        line('force-on-ball', `橙箭头：台面对球的切向摩擦 Jₜ ${cue.frictionDirection}（尖端沿此方向移动）`, true) + '<br>' +
+        line('force-on-table', `绿箭头：球对台面的擦动 v∥ ${cue.slipDirection}（尖端反向移动）`, false) + '<br>' +
         `<span class="force-metrics">${metrics}</span>`;
     } else if (stage === 'normal') {
       eventEl.innerHTML = `<strong>${title} · 再看法向冲量</strong><br>` +
@@ -322,29 +336,14 @@ export function initRecordingEffects(deps: {
           : stage === 'normal'
             ? { friction: 0.24, slip: 0.22, normal: 1, resultant: 0, rubbing: 0.35 }
             : { friction: 0.78, slip: 0.42, normal: 0.82, resultant: 1, rubbing: 0.72 };
-      const frictionReveal = stage === 'pause'
-        ? 0
-        : stage === 'friction'
-          ? THREE.MathUtils.smoothstep((cue.age - FORCE_PAUSE_SECONDS) / 0.36, 0, 1)
-          : 1;
-      const normalReveal = stage === 'normal'
-        ? THREE.MathUtils.smoothstep((cue.age - FRICTION_FOCUS_END_SECONDS) / 0.36, 0, 1)
-        : stage === 'resultant'
-          ? 1
-          : 0;
-      const resultantReveal = stage === 'resultant'
-        ? THREE.MathUtils.smoothstep((cue.age - NORMAL_FOCUS_END_SECONDS) / 0.36, 0, 1)
-        : 0;
-      const setArrowReveal = (arrow: THREE.ArrowHelper, factor: number, reveal: number): void => {
-        const eased = THREE.MathUtils.clamp(reveal, 0, 1);
-        arrow.scale.setScalar(0.14 + 0.86 * eased);
-        const visibility = factor <= 0 ? 0 : 0.14 + 0.86 * eased;
-        setArrowOpacity(arrow, opacity * factor * visibility * focusFactor);
-      };
-      setArrowReveal(cue.frictionArrow, arrowFactors.friction, frictionReveal);
-      setArrowReveal(cue.slipArrow, arrowFactors.slip, frictionReveal);
-      setArrowReveal(cue.normalArrow, arrowFactors.normal, normalReveal);
-      setArrowReveal(cue.resultantArrow, arrowFactors.resultant, resultantReveal);
+      moveArrowHead(cue.frictionArrow, FRICTION_ARROW_LENGTH_MM, arrowFlowPhase(cue.age, FORCE_PAUSE_SECONDS));
+      moveArrowHead(cue.slipArrow, SLIP_ARROW_LENGTH_MM, arrowFlowPhase(cue.age, FORCE_PAUSE_SECONDS));
+      moveArrowHead(cue.normalArrow, NORMAL_ARROW_LENGTH_MM, arrowFlowPhase(cue.age, FRICTION_FOCUS_END_SECONDS));
+      moveArrowHead(cue.resultantArrow, RESULTANT_ARROW_LENGTH_MM, arrowFlowPhase(cue.age, NORMAL_FOCUS_END_SECONDS));
+      setArrowOpacity(cue.frictionArrow, opacity * arrowFactors.friction * focusFactor);
+      setArrowOpacity(cue.slipArrow, opacity * arrowFactors.slip * focusFactor);
+      setArrowOpacity(cue.normalArrow, opacity * arrowFactors.normal * focusFactor);
+      setArrowOpacity(cue.resultantArrow, opacity * arrowFactors.resultant * focusFactor);
       cue.rubbingLine.material.opacity = opacity * arrowFactors.rubbing * focusFactor;
       const reveal = THREE.MathUtils.clamp((cue.age - FORCE_PAUSE_SECONDS) / 0.62, 0, 1);
       cue.rubbingLine.scale.setScalar(0.12 + 0.88 * THREE.MathUtils.smoothstep(reveal, 0, 1));
