@@ -19,17 +19,17 @@ v45 针对接触讲解重新安排了演示节奏。碰台前的慢放现在用 
 - 时间线 ID：`afa799a1-c9fc-4aff-b02f-c8faecd040c2`
 - 合成规格：1920×1080，30 fps，55 秒
 - 旁白：沿用已校准的 ChatCut 普通话旁白；开场反问句和原稿文字未改变
-- 字幕：保留原有 22 张中文卡片，恢复 ChatCut `plain` 基础样式（白字、单行/单卡、无绿色逐词高亮、无堆叠倾斜）
+- 字幕：保留原有 22 张中文卡片，恢复上一版的大号白字黑底卡片样式（`deyi-card` 基础模板加大号字、粗体和深色底；无绿色逐词高亮、无堆叠倾斜）
 
 时间线切点仍为标准 `[0,338)` 帧、临界 `[338,651)` 帧、过零 `[651,1011)` 帧、受力讲解 `[1011,1371)` 帧和条件性结论 `[1371,1650)` 帧。重复的过零素材使用独立的本地副本，避免导出时在同一源资产边界卡住。
 
 ## 素材与成片
 
 - 60 fps 源片目录：`/Users/norman/Movies/pingpong-sim/spin-reversal/raw/v45-force-hold/`
-- 横版成片：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/chatcut/spin-reversal-horizontal-v45-smooth-force-hold.mp4`
-- 局域网预览：`http://192.168.7.187:8777/spin-reversal/exports/chatcut/spin-reversal-horizontal-v45-smooth-force-hold.mp4`
+- 横版成片：`/Users/norman/Movies/pingpong-sim/spin-reversal/exports/chatcut/spin-reversal-horizontal-v45-smooth-force-hold-card.mp4`
+- 局域网预览：`http://192.168.7.187:8777/spin-reversal/exports/chatcut/spin-reversal-horizontal-v45-smooth-force-hold-card.mp4`
 
-导出文件已用 AVAssetReader 全量检查：55.0 秒、1920×1080、30 fps、1650 个视频帧，包含 H.264 视频和 AAC 音频；局域网入口返回 HTTP 200，文件大小约 15.3 MB。三种源片均为 720 帧、12 秒、1920×1080、60 fps。v45 遥测中，标准条件两球在约第 134/384 帧同时碰台；临界条件两球约在第 149/195 与 376/432 帧碰台；过零条件两球约在第 116/162 与 421/477 帧碰台。
+导出文件已用 AVAssetReader 全量检查：55.0 秒、1920×1080、30 fps、1650 个视频帧，包含 H.264 视频和 AAC 音频；局域网入口返回 HTTP 200，文件大小约 15.7 MB。三种源片均为 720 帧、12 秒、1920×1080、60 fps。v45 遥测中，标准条件两球在约第 134/384 帧同时碰台；临界条件两球约在第 149/195 与 376/432 帧碰台；过零条件两球约在第 116/162 与 421/477 帧碰台。
 
 原始 PNG、源片和导出 MP4 全部放在仓库外，未进入 Git。录制使用无头 Chrome 的逐帧 CDP 捕捉；每次录制结束后子浏览器进程和 9230–9232 端口均关闭。
 
