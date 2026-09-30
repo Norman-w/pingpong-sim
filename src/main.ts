@@ -173,9 +173,11 @@ const recordingCaptureFps = Number.isFinite(requestedRecordingFps) && requestedR
   : 60;
 // Keep the live comparison balls on screen long enough for an external
 // recorder to show both bounces. The collider, impulses, and resulting RPM
-// values are unchanged; recording playback uses a stable 0.25× clock so the
-// 240 Hz solver advances predictably at common 30/60 fps capture rates.
-const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.25 : 1;
+// values are unchanged; recording playback uses a stable 0.10× editorial
+// clock so the two table contacts are separated enough to read at 60 fps.
+// This only changes presentation speed; the collider, impulses, and resulting
+// RPM values remain those of the same physical run.
+const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.1 : 1;
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
   ? requestedSpinMode
   : 'reversal';
