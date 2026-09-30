@@ -18,6 +18,7 @@ import {
   type RecordingCameraApi,
 } from './features/recordingCamera';
 import { initRecordingEffects, type RecordingEffectsApi } from './features/recordingEffects';
+import { TABLE_CONTACT_Y } from './domain/tableImpact';
 
 //#endregion
 
@@ -171,13 +172,12 @@ const requestedRecordingFps = Number(new URLSearchParams(window.location.search)
 const recordingCaptureFps = Number.isFinite(requestedRecordingFps) && requestedRecordingFps >= 24 && requestedRecordingFps <= 60
   ? requestedRecordingFps
   : 60;
-// Keep the live comparison balls on screen long enough for an external
-// recorder to show both bounces. The collider, impulses, and resulting RPM
-// values are unchanged; recording playback uses a stable 0.10× editorial
-// clock so the two table contacts are separated enough to read at 60 fps.
-// This only changes presentation speed; the collider, impulses, and resulting
-// RPM values remain those of the same physical run.
-const recordingPhysicsTimeScale = recordingMode === 'spin-reversal' ? 0.1 : 1;
+// Keep flight at real speed and slow only the short contact window. The
+// collision resolver still receives the same physical velocities and applies
+// the same impulses; this is presentation timing for the recording take.
+const recordingContactSlowScale = 0.025;
+const recordingContactPreRollSeconds = 0.08;
+const recordingContactSlowWindowSeconds = 4;
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
   ? requestedSpinMode
   : 'reversal';
@@ -192,10 +192,12 @@ const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-rev
   })
   : null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
-const recordingPostSecondBounceSeconds = 0.22;
+const recordingPostSecondBounceSeconds = 0.28;
 let recordingCycleElapsed = 0;
 let recordingLaunchPending = false;
 const recordingImpactCounts = new WeakMap<RapierBall, number>();
+let recordingContactSlowRemaining = 0;
+let recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
 
 const recordingPhaseLabels: Record<RecordingCameraPhase, string> = {
   establish: '开场 · 先看两球的起始状态',
@@ -208,12 +210,39 @@ async function startRecordingSpinCycle(): Promise<void> {
   if (recordingLaunchPending) return;
   recordingLaunchPending = true;
   recordingCycleElapsed = 0;
+  recordingContactSlowRemaining = 0;
+  recordingContactSlowTriggerCounts = new WeakMap<RapierBall, number>();
   recordingEffects?.reset();
   recordingCamera?.reset();
   try {
     await topicDemoApi.startSpinReversalDemo(recordingSpinMode);
   } finally {
     recordingLaunchPending = false;
+  }
+}
+
+function secondsToNextTableContact(ball: RapierBall): number | null {
+  if (ball.tableImpacts >= 2 || ball.supportedByTable) return null;
+  const position = ball.body.translation();
+  const velocity = ball.body.linvel();
+  if (velocity.y >= -0.05 || position.y <= TABLE_CONTACT_Y) return null;
+  const heightAboveContact = position.y - TABLE_CONTACT_Y;
+  const discriminant = velocity.y ** 2 + 2 * 9.81 * heightAboveContact;
+  if (discriminant <= 0) return null;
+  const seconds = (velocity.y + Math.sqrt(discriminant)) / 9.81;
+  return seconds >= 0 ? seconds : null;
+}
+
+function startContactSlowMotionIfNeeded(): void {
+  if (recordingMode !== 'spin-reversal' || recordingContactSlowRemaining > 0) return;
+  for (const ball of getBalls()) {
+    const impactIndex = ball.tableImpacts;
+    if (impactIndex >= 2 || recordingContactSlowTriggerCounts.get(ball) === impactIndex) continue;
+    const secondsToImpact = secondsToNextTableContact(ball);
+    if (secondsToImpact === null || secondsToImpact > recordingContactPreRollSeconds) continue;
+    recordingContactSlowTriggerCounts.set(ball, impactIndex);
+    recordingContactSlowRemaining = recordingContactSlowWindowSeconds;
+    return;
   }
 }
 
@@ -279,7 +308,10 @@ function updateRecordingImpactCues(): void {
 function updateRecordingChapter(): void {
   if (!recordingCamera) return;
   const chapter = document.getElementById('spin-recording-chapter');
-  if (chapter) chapter.textContent = recordingPhaseLabels[recordingCamera.phase()];
+  if (!chapter) return;
+  chapter.textContent = recordingContactSlowRemaining > 0
+    ? `接触慢放 · ${recordingContactSlowScale.toFixed(3)}×`
+    : recordingPhaseLabels[recordingCamera.phase()];
 }
 
 setResetMachineOnClear(() => {
@@ -357,7 +389,12 @@ function animate(): void {
   // follows the same trajectory; only camera phase timing/interpolation uses
   // trackingSpeed.
   if (recordingMode === 'spin-reversal') recordingCycleElapsed += elapsedSeconds;
-  physicsStep(elapsedSeconds * recordingPhysicsTimeScale);
+  startContactSlowMotionIfNeeded();
+  const recordingScale = recordingContactSlowRemaining > 0 ? recordingContactSlowScale : 1;
+  physicsStep(elapsedSeconds * recordingScale);
+  if (recordingContactSlowRemaining > 0) {
+    recordingContactSlowRemaining = Math.max(0, recordingContactSlowRemaining - elapsedSeconds);
+  }
   retireCompletedRecordingBalls();
   syncMeshes();
   updateRecordingImpactCues();

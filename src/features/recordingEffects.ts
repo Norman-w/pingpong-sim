@@ -4,7 +4,7 @@ import type { TableImpactEvent } from '../domain/tableImpact';
 //#endregion
 
 //#region 常量/配置
-const CUE_LIFETIME_SECONDS = 1.05;
+const CUE_LIFETIME_SECONDS = 2.4;
 const CUE_START_RADIUS_MM = 28;
 const CUE_END_RADIUS_MM = 175;
 const FRICTION_ARROW_LENGTH_MM = 190;
@@ -191,7 +191,7 @@ export function initRecordingEffects(deps: {
       // blue/red contacts without introducing a timing dependency in physics.
       void eventEl.offsetWidth;
       eventEl.classList.add('visible', 'pulse');
-      eventTimer = 1.15;
+      eventTimer = 2.8;
     }
   };
 

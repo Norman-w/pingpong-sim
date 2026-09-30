@@ -18,10 +18,11 @@ interface RecordingCameraKeyframe {
 
 const RECORDING_CAMERA_KEYFRAMES: readonly RecordingCameraKeyframe[] = [
   { time: 0, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
-  { time: 1.4, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
-  // The camera push has constant speed and a fixed FOV. This avoids an
-  // unexplained zoom or an orbit that competes with the bounce event.
-  { time: 4.6, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
+  { time: 0.45, position: [4000, 1800, 1400], target: [1340, 650, -762.5], fov: 46 },
+  // Finish the one constant-speed push before the first contact slow window.
+  // The camera then holds this readable 3D contact view while the ball is
+  // slowed at the table instead of drifting through the collision.
+  { time: 1.35, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
   { time: 12, position: [2850, 1450, 800], target: [1700, 700, -762.5], fov: 46 },
 ];
 //#endregion
@@ -46,8 +47,8 @@ const fromTargetScratch = new THREE.Vector3();
 const toTargetScratch = new THREE.Vector3();
 
 function phaseForTime(time: number): RecordingCameraPhase {
-  if (time < 1.4) return 'establish';
-  if (time < 4.6) return 'approach';
+  if (time < 0.45) return 'establish';
+  if (time < 1.35) return 'approach';
   if (time < 8.5) return 'contact';
   return 'hold';
 }
