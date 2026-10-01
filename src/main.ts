@@ -211,7 +211,11 @@ const recordingCamera: RecordingCameraApi | null = recordingMode === 'spin-rever
     getFocusPoint: () => recordingFocusPoint?.clone() ?? null,
   })
   : null;
-const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-reversal'
+// Overview takes are the narrative/result chapters: they must show the ball
+// path and the measured outcome without a force card or vector competing for
+// attention. The dedicated force take is the only source allowed to render
+// contact arrows and the force explanation card.
+const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-reversal' && recordingCameraShot === 'force'
   ? initRecordingEffects({
     scene,
     tableTopY: TABLE_TOP_Y,
@@ -400,7 +404,7 @@ function retireCompletedRecordingBalls(): void {
 }
 
 function updateRecordingImpactCues(): void {
-  if (recordingMode !== 'spin-reversal' || !recordingEffects) return;
+  if (recordingMode !== 'spin-reversal') return;
   const pending: Array<{
     ball: RapierBall;
     impact: number;
@@ -430,14 +434,19 @@ function updateRecordingImpactCues(): void {
       : ball.recordingColor === 0xff5d73
         ? '红球'
         : '球';
-    recordingEffects.addImpactCue(
-      ball.lastTableImpact.x * 1000,
-      ball.lastTableImpact.z * 1000,
-      ball.recordingColor ?? 0xffffff,
-      item.impact,
-      item.event,
-      ballLabel,
-    );
+    // The force close-up is reserved for the decisive second contact. The
+    // overview still advances the same timing state, but it carries no force
+    // card, arrow, or rubbing line at all.
+    if (recordingEffects && (recordingCameraShot !== 'force' || item.impact === 2)) {
+      recordingEffects.addImpactCue(
+        ball.lastTableImpact.x * 1000,
+        ball.lastTableImpact.z * 1000,
+        ball.recordingColor ?? 0xffffff,
+        item.impact,
+        item.event,
+        ballLabel,
+      );
+    }
     if (ball.recordingColor === focusColor) {
       recordingFocusPoint = new THREE.Vector3(
         ball.lastTableImpact.x * 1000,
@@ -472,7 +481,9 @@ function updateRecordingChapter(): void {
   const chapter = document.getElementById('spin-recording-chapter');
   if (!chapter) return;
   if (recordingImpactPauseRemaining > 0) {
-    chapter.textContent = '接触停帧 · 先看接触点，再看受力箭头';
+    chapter.textContent = recordingCameraShot === 'force'
+      ? '接触停帧 · 先看接触点，再看一个力'
+      : '接触停帧 · 先看落点和转速变化';
   } else if (recordingContactSlowPhase !== 'idle') {
     const scale = recordingContactPhysicsScale();
     const phaseLabel = recordingContactSlowPhase === 'ramp-in'
