@@ -181,23 +181,28 @@ const recordingCameraShot: RecordingCameraShot = requestedRecordingShot === 'con
 // Keep the measured collision and make the contact readable in the recording.
 // The resolver still receives the same physical velocities and applies the
 // same impulses; these scales only stretch presentation time for the take.
-const recordingContactSlowScale = 0.02;
+// Keep the contact visibly slow without starving the fixed-step renderer.
+// At 0.02x Rapier advances only one fixed step every several captured
+// frames, which makes the ball appear to tick even though the camera is
+// recording at 60 fps.  0.06x is still a clear slow-motion view while the
+// interpolation window remains short enough to look continuous.
+const recordingContactSlowScale = 0.06;
 // Begin the presentation ramp shortly before the measured table crossing so
 // the ball reaches the very slow part at contact instead of jumping into it.
-const recordingContactPreRollSeconds = 0.16;
-const recordingContactRampInSeconds = 0.28;
-const recordingContactHoldSeconds = 3.6;
-const recordingContactRampOutSeconds = 0.72;
+const recordingContactPreRollSeconds = 0.60;
+const recordingContactRampInSeconds = 0.60;
+const recordingContactHoldSeconds = 3.0;
+const recordingContactRampOutSeconds = 1.40;
 // A real contact frame is held for the force callout. This is presentation
 // timing only; the resolver and its measured impulses are unchanged.
-const recordingImpactPauseSeconds = 0.90;
+const recordingImpactPauseSeconds = 1.20;
 // Between the first and second table contacts, keep a separate eased travel
 // phase. The collision model is unchanged; this only makes the measured arc
 // readable instead of letting the post-bounce flight flash past.
-const recordingBetweenBounceScale = 0.08;
-const recordingBetweenBounceStartScale = 0.03;
-const recordingBetweenBounceRampInSeconds = 0.72;
-const recordingBetweenBounceRampOutSeconds = 1.20;
+const recordingBetweenBounceScale = 0.16;
+const recordingBetweenBounceStartScale = 0.11;
+const recordingBetweenBounceRampInSeconds = 1.10;
+const recordingBetweenBounceRampOutSeconds = 1.80;
 type RecordingContactSlowPhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 type RecordingBetweenBouncePhase = 'idle' | 'ramp-in' | 'hold' | 'ramp-out';
 const recordingSpinMode = requestedSpinMode === 'standard' || requestedSpinMode === 'critical' || requestedSpinMode === 'reversal'
@@ -287,7 +292,22 @@ function startContactSlowMotionIfNeeded(): void {
     const impactIndex = ball.tableImpacts;
     if (impactIndex >= 2 || recordingContactSlowTriggerCounts.get(ball) === impactIndex) continue;
     const secondsToImpact = secondsToNextTableContact(ball);
-    if (secondsToImpact === null || secondsToImpact > recordingContactPreRollSeconds) continue;
+    if (secondsToImpact === null) continue;
+    // secondsToNextTableContact is measured on the physical clock. During
+    // the first→second-bounce travel the presentation clock is deliberately
+    // slowed, so compare the projected wall-clock time after that scale is
+    // applied. Without this conversion the second-contact slow ramp started
+    // several seconds early and looked like a sudden speed change.
+    const presentationScale = recordingBetweenBouncePhase === 'idle'
+      ? 1
+      : Math.max(recordingBetweenBouncePhysicsScale(), 0.01);
+    // The contact ramp itself changes the scale, so use its average scale
+    // rather than the current between-bounce scale. This makes the requested
+    // 0.60 s visual pre-roll end at the measured contact instead of starting
+    // a full second early when the ramp slows the remaining physics time.
+    const rampAverageScale = (presentationScale + recordingContactSlowScale) / 2;
+    const presentationSecondsToImpact = secondsToImpact / Math.max(rampAverageScale, 0.01);
+    if (presentationSecondsToImpact > recordingContactPreRollSeconds) continue;
     recordingContactSlowStartedFromBetween = recordingBetweenBouncePhase !== 'idle' && impactIndex >= 1;
     if (recordingContactSlowStartedFromBetween) {
       recordingBetweenBouncePhase = 'ramp-out';
@@ -485,20 +505,18 @@ function updateRecordingChapter(): void {
       ? '接触停帧 · 先看接触点，再看一个力'
       : '接触停帧 · 先看落点和转速变化';
   } else if (recordingContactSlowPhase !== 'idle') {
-    const scale = recordingContactPhysicsScale();
     const phaseLabel = recordingContactSlowPhase === 'ramp-in'
-      ? '缓入'
+      ? '慢慢降速'
       : recordingContactSlowPhase === 'ramp-out'
-        ? '缓出'
-        : `${scale.toFixed(3)}×`;
+        ? '慢慢恢复'
+        : '看清碰台瞬间';
     chapter.textContent = `接触慢放 · ${phaseLabel}`;
   } else if (recordingBetweenBouncePhase !== 'idle') {
-    const scale = recordingBetweenBouncePhysicsScale();
     const phaseLabel = recordingBetweenBouncePhase === 'ramp-in'
-      ? '平滑减速'
+      ? '慢慢减速'
       : recordingBetweenBouncePhase === 'ramp-out'
-        ? '平滑恢复'
-        : `${scale.toFixed(2)}×`;
+        ? '慢慢恢复'
+        : '看清两跳之间的弧线';
     chapter.textContent = `第一跳→第二跳 · ${phaseLabel}`;
   } else {
     chapter.textContent = recordingPhaseLabels[recordingCamera.phase()];
