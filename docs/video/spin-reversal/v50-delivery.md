@@ -18,11 +18,13 @@
 
 ## 三个源镜头
 
-所有源 MP4 位于仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/working/v50-detail/`，不进入 Git：
+三段本轮重录源 MP4 位于仓库外的 `/Users/norman/Movies/pingpong-sim/spin-reversal/working/v50-detail/`，不进入 Git。v50 还复用了标准条件和临界条件的两个 60 fps 总览源，保留在 `working/v48-detail/`，因为当前时间线仍直接引用它们：
 
 - `reversal-overview.mp4`：完整球台、双球路径和连续两跳总览。
 - `reversal-force.mp4`：以接触点为中心的受力近景，逐阶段只保留一个焦点箭头。
 - `reversal-contact.mp4`：接触点近景，专门看球面自转、蹭台瞬间和接触环。
+- `../v48-detail/standard-overview-60fps.mp4`：v50 标准条件段仍引用的源文件。
+- `../v48-detail/critical-overview-60fps.mp4`：v50 临界条件段仍引用的源文件。
 
 每段为 1920×1080、60 fps、20 秒、无音频的视觉源素材；旁白、字幕和节奏由 ChatCut 时间线提供。
 
@@ -71,3 +73,7 @@
 视频只作条件性的三维仿真说明：不是所有下旋都会变成上旋。是否反转取决于落台时的入射速度和角度、初始旋转、切向摩擦，以及球和台面的有效接触状态。空气阻力主要使旋转衰减；重力改变落台速度和法向冲量，但不直接把下旋变成上旋。真正可能把角速度推过零的是接触瞬间的切向摩擦。RPM 是仿真计算值，有效摩擦参数不是某一张球台或胶皮的现场实测值。
 
 本轮没有自动发布到乒友群或乒云。原始录屏、ChatCut 工程、音频和导出 MP4 全部保留在 `/Users/norman/Movies/pingpong-sim/spin-reversal/`，不提交到 Git；平台发布由用户手动完成。
+
+## 历史媒体清理
+
+2026-10-01 已清除仓库外的历史导出、旧原始帧、旧 ChatCut 交接目录和旧本地配音版本，共释放约 8.74 GiB。ChatCut 项目也已删除 v30–v49 的旧时间线及未被 v50 引用的视频/音频资产，只保留 v50 当前时间线和它实际需要的媒体。
