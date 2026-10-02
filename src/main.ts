@@ -418,6 +418,22 @@ function setRecordingBallOpacity(ball: RapierBall, opacity: number): void {
   material.needsUpdate = true;
 }
 
+function updateRecordingFocusVisuals(): void {
+  if (recordingMode !== 'spin-reversal') return;
+  const focusColor = recordingSpinMode === 'standard' ? 0x54d6ff : 0xff5d73;
+  for (const ball of getBalls()) {
+    if (ball.recordingColor === undefined) continue;
+    // Keep the selected path fully readable and deliberately recede the
+    // comparison path. The fade factor is applied after the focus factor so
+    // the post-second-bounce exit remains smooth for either ball.
+    const fadeOpacity = ball.recordingFadeProgress === undefined
+      ? 1
+      : 1 - ball.recordingFadeProgress;
+    const focusOpacity = ball.recordingColor === focusColor ? 1 : 0.24;
+    setRecordingBallOpacity(ball, fadeOpacity * focusOpacity);
+  }
+}
+
 function disposeRecordingBallMaterial(ball: RapierBall): void {
   if (Array.isArray(ball.mesh.material) || ball.mesh.material === ballMaterial) return;
   ball.mesh.material.dispose();
@@ -646,6 +662,7 @@ function animate(): void {
     advanceRecordingBetweenBouncePhase(elapsedSeconds);
   }
   retireCompletedRecordingBalls(elapsedSeconds);
+  updateRecordingFocusVisuals();
   syncMeshes();
   updateRecordingImpactCues();
   recordingEffects?.update(elapsedSeconds);
