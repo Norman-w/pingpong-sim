@@ -228,12 +228,13 @@ const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-rev
   })
   : null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
-const recordingPostSecondBounceSeconds = 0.28;
-// The second-bounce arc is deliberately kept before a third physical contact
-// can occur. Fade the actual rendered sphere from its apex to that cleanup
-// point so the recording never cuts the ball out of the air in one frame.
-const recordingPostSecondBounceFadeLeadSeconds = 0.10;
-const recordingPostSecondBounceFadeDurationSeconds = 0.45;
+// Keep the ball visible while it leaves the table after the second contact.
+// The old 0.28 s cleanup window made the sphere disappear before the viewer
+// could see the outgoing arc. Hold the physical trajectory first, then use a
+// long fade so the exit reads as a deliberate end of the shot.
+const recordingPostSecondBounceSeconds = 2.20;
+const recordingPostSecondBounceFadeLeadSeconds = 0.80;
+const recordingPostSecondBounceFadeDurationSeconds = 1.20;
 let recordingCycleElapsed = 0;
 let recordingLaunchPending = false;
 const recordingImpactCounts = new WeakMap<RapierBall, number>();

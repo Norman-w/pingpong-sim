@@ -127,7 +127,7 @@ def find_page(port: int) -> str:
     raise RuntimeError("pingpong-sim page was not found")
 
 
-def wait_for_page(port: int, timeout: float = 10) -> str:
+def wait_for_page(port: int, timeout: float = 60) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -240,11 +240,16 @@ def main() -> None:
         )
         cdp.call("Emulation.setDeviceMetricsOverride", {"width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": False})
         cdp.call("Page.reload", {"ignoreCache": True})
-        time.sleep(1.5)
-        info = evaluate(
-            cdp,
-            "({hidden:document.hidden,canvas:document.querySelector('canvas') && [document.querySelector('canvas').width,document.querySelector('canvas').height],queue:window.__pingpongManualQueue()})",
-        )
+        deadline = time.monotonic() + 30
+        info = {}
+        while time.monotonic() < deadline:
+            time.sleep(0.5)
+            info = evaluate(
+                cdp,
+                "({hidden:document.hidden,canvas:document.querySelector('canvas') && [document.querySelector('canvas').width,document.querySelector('canvas').height],queue:window.__pingpongManualQueue()})",
+            )
+            if info.get("canvas") == [1920, 1080]:
+                break
         if info.get("canvas") != [1920, 1080]:
             raise RuntimeError(f"unexpected capture canvas: {info}")
 
