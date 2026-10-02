@@ -141,10 +141,10 @@ export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
   const comparisonRpm = run.comparison.impacts.at(-1)?.afterTopSpinRpm ?? 0;
   const comparisonLabel = comparisonDisplayLabel(run.comparisonProfile);
   const focus = run.comparisonProfile.id === 'critical'
-    ? { tone: 'critical', label: '重点看红球 · 临界下旋：第二跳后接近不转' }
+    ? { tone: 'critical', label: '临界条件｜红球：第二跳后接近不转' }
     : run.comparisonProfile.id === 'high-grip'
-      ? { tone: 'reversal', label: '重点看红球 · 过零条件：第二跳后显示上旋' }
-      : { tone: 'standard', label: '重点看蓝球 · 标准条件：两次碰台后仍是下旋' };
+      ? { tone: 'reversal', label: '过零条件｜红球：第二跳后显示上旋' }
+      : { tone: 'standard', label: '标准条件｜蓝球：两次碰台后仍是下旋' };
   const standardClass = focus.tone === 'standard' ? ' focus-line' : '';
   const comparisonClass = focus.tone === 'standard' ? '' : ' focus-line';
   const outcome = run.comparison.outcome === 'reversed'
