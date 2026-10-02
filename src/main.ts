@@ -229,6 +229,11 @@ const recordingEffects: RecordingEffectsApi | null = recordingMode === 'spin-rev
   : null;
 const recordingDemoRestartSeconds = RECORDING_CAMERA_CYCLE_SECONDS;
 const recordingPostSecondBounceSeconds = 0.28;
+// The second-bounce arc is deliberately kept before a third physical contact
+// can occur. Fade the actual rendered sphere from its apex to that cleanup
+// point so the recording never cuts the ball out of the air in one frame.
+const recordingPostSecondBounceFadeLeadSeconds = 0.10;
+const recordingPostSecondBounceFadeDurationSeconds = 0.45;
 let recordingCycleElapsed = 0;
 let recordingLaunchPending = false;
 const recordingImpactCounts = new WeakMap<RapierBall, number>();
@@ -406,18 +411,47 @@ function advanceRecordingBetweenBouncePhase(deltaSeconds: number): void {
   }
 }
 
-function retireCompletedRecordingBalls(): void {
+function setRecordingBallOpacity(ball: RapierBall, opacity: number): void {
+  const material = Array.isArray(ball.mesh.material) ? ball.mesh.material[0] : ball.mesh.material;
+  if (!(material instanceof THREE.MeshBasicMaterial)) return;
+  material.opacity = Math.max(0, Math.min(1, opacity));
+  material.needsUpdate = true;
+}
+
+function disposeRecordingBallMaterial(ball: RapierBall): void {
+  if (Array.isArray(ball.mesh.material) || ball.mesh.material === ballMaterial) return;
+  ball.mesh.material.dispose();
+}
+
+function retireCompletedRecordingBalls(deltaSeconds: number): void {
   if (recordingMode !== 'spin-reversal') return;
   const retire: RapierBall[] = [];
   for (const ball of [...getBalls()]) {
     if (ball.recordingMaxImpacts === undefined) continue;
     if (ball.tableImpacts >= ball.recordingMaxImpacts && ball.recordingStopAt === undefined) {
       ball.recordingStopAt = ball.t + recordingPostSecondBounceSeconds;
+      ball.recordingFadeStartAt = Math.max(
+        ball.t,
+        ball.recordingStopAt - recordingPostSecondBounceFadeLeadSeconds,
+      );
+      ball.recordingFadeProgress = 0;
+    }
+    if (
+      ball.recordingFadeStartAt !== undefined &&
+      ball.t >= ball.recordingFadeStartAt &&
+      ball.recordingFadeProgress !== undefined
+    ) {
+      ball.recordingFadeProgress = Math.min(
+        1,
+        ball.recordingFadeProgress + Math.max(0, deltaSeconds) / recordingPostSecondBounceFadeDurationSeconds,
+      );
+      setRecordingBallOpacity(ball, 1 - ball.recordingFadeProgress);
     }
     if (ball.recordingStopAt !== undefined && ball.t >= ball.recordingStopAt) retire.push(ball);
   }
   for (const ball of retire) {
     scene.remove(ball.mesh);
+    disposeRecordingBallMaterial(ball);
     machineBallMeta.delete(ball.body);
     removeBall(ball);
   }
@@ -611,7 +645,7 @@ function animate(): void {
     advanceRecordingContactSlowPhase(elapsedSeconds);
     advanceRecordingBetweenBouncePhase(elapsedSeconds);
   }
-  retireCompletedRecordingBalls();
+  retireCompletedRecordingBalls(elapsedSeconds);
   syncMeshes();
   updateRecordingImpactCues();
   recordingEffects?.update(elapsedSeconds);

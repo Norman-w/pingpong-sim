@@ -166,7 +166,13 @@ export function initBallVisuals(deps: {
     const geometry = recordingSpinDemo && color !== undefined
       ? recordingGeometryForColor(color)
       : bGeo;
-    const mesh = new THREE.Mesh(geometry, ballMaterial);
+    const material = recordingSpinDemo ? ballMaterial.clone() : ballMaterial;
+    if (recordingSpinDemo) {
+      material.transparent = true;
+      material.opacity = 1;
+      material.depthWrite = false;
+    }
+    const mesh = new THREE.Mesh(geometry, material);
     if (recordingSpinDemo) {
       // Keep the visible 40 mm sphere exactly coincident with Rapier's 20 mm
       // radius collider. A previous recording-only enlargement left the
@@ -212,7 +218,12 @@ export function initBallVisuals(deps: {
 
   async function clearBalls(): Promise<void> {
     resetMachineOnClear();
-    for (const b of getBalls()) scene.remove(b.mesh);
+    for (const b of getBalls()) {
+      scene.remove(b.mesh);
+      if (b.mesh.material !== ballMaterial && !Array.isArray(b.mesh.material)) {
+        b.mesh.material.dispose();
+      }
+    }
     clearAllBalls();
     machineBallMeta.clear();
     document.getElementById('bc')!.textContent = '0';

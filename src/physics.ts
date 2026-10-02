@@ -52,6 +52,8 @@ export interface RapierBall {
   /** Recording-only lifecycle controls; normal demos leave these undefined. */
   recordingMaxImpacts?: number;
   recordingStopAt?: number;
+  recordingFadeStartAt?: number;
+  recordingFadeProgress?: number;
   /** Recording-only colour used for contact cues; physics never reads it. */
   recordingColor?: number;
 }
