@@ -145,18 +145,31 @@ export function spinRecordingMetricsHtml(run: SpinReversalRun): string {
     : run.comparisonProfile.id === 'high-grip'
       ? { tone: 'reversal', label: '过零条件｜红球：第二跳后显示上旋' }
       : { tone: 'standard', label: '标准条件｜蓝球：两次碰台后仍是下旋' };
-  const standardClass = focus.tone === 'standard' ? ' focus-line' : '';
-  const comparisonClass = focus.tone === 'standard' ? '' : ' focus-line';
   const outcome = run.comparison.outcome === 'reversed'
     ? '第二跳后过零，变成上旋'
     : run.comparison.outcome === 'near-zero'
       ? '第二跳后接近不转'
       : '第二跳后仍是下旋';
-  return `<div class="recording-focus ${focus.tone}">${focus.label}</div>` +
-    `<div class="recording-result-line${standardClass}"><span class="recording-ball blue">蓝球</span> 标准条件：两次落台后仍是下旋</div>` +
-    `<div class="recording-result-line${comparisonClass}"><span class="recording-ball red">红球</span> ${comparisonLabel}：${outcome}</div>` +
-    `<div class="recording-rpm">仿真计算值：蓝 ${Math.round(standardRpm)} rpm · 红 ${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)} rpm</div>` +
-    `<div class="recording-note">球台一样，红球只调了出手时的下旋。</div>`;
+  const standardFocusClass = focus.tone === 'standard' ? ' is-focus' : '';
+  const comparisonFocusClass = focus.tone === 'standard' ? '' : ' is-focus';
+  const comparisonSignedRpm = `${comparisonRpm > 0 ? '+' : ''}${Math.round(comparisonRpm)}`;
+  return `<div class="recording-data-head">` +
+    `<div><span class="recording-data-kicker">SIMULATION DATA</span><strong>碰台后 · 旋转读数</strong></div>` +
+    `<span class="recording-data-live">3D / LIVE</span>` +
+    `</div>` +
+    `<div class="recording-data-focus ${focus.tone}"><span class="recording-data-focus-dot"></span><span>${focus.label}</span></div>` +
+    `<div class="recording-data-row blue${standardFocusClass}">` +
+      `<span class="recording-data-dot"></span>` +
+      `<div class="recording-data-copy"><b>蓝球</b><span>标准条件 · 两次落台后仍是下旋</span></div>` +
+      `<strong class="recording-data-state blue">下旋</strong>` +
+    `</div>` +
+    `<div class="recording-data-row red${comparisonFocusClass}">` +
+      `<span class="recording-data-dot"></span>` +
+      `<div class="recording-data-copy"><b>红球</b><span>${comparisonLabel} · ${outcome}</span></div>` +
+      `<strong class="recording-data-state red">${run.comparison.finalSense === 'topspin' ? '上旋' : run.comparison.finalSense === 'backspin' ? '下旋' : '近零'}</strong>` +
+    `</div>` +
+    `<div class="recording-data-rpm"><span>仿真计算值</span><strong><i class="blue">蓝 ${Math.round(standardRpm)} rpm</i><i class="red">红 ${comparisonSignedRpm} rpm</i></strong></div>` +
+    `<div class="recording-data-foot"><span class="recording-data-foot-dot"></span>同一球台 · 只调整出手时的下旋</div>`;
 }
 
 export function spinOverlayStatus(run: SpinReversalRun): string {
